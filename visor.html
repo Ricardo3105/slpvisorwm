@@ -301,18 +301,6 @@
     return { kvHtml, chipsHtml };
   }
 
-  // Botón Google Maps (sin alterar atributos visibles)
-  function buildMapButton(row){
-    if(!latKey || !lonKey) return "";
-    let lat = row[latKey], lon = row[lonKey];
-    if(lat == null || lon == null || lat === "" || lon === "") return "";
-    lat = String(lat).replace(",","."); lon = String(lon).replace(",",".");
-    const la = Number(lat), lo = Number(lon);
-    if(!isFinite(la) || !isFinite(lo)) return "";
-    const href = `https://www.google.com/maps?q=${la},${lo}`;
-    return `<a class="btn-link" href="${href}" target="_blank" rel="noopener">Ver en Google Maps</a>`;
-  }
-
   function escapeHtml(v){
     return String(v ?? '').replace(/[&<>"']/g, s => ({
       '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
