@@ -1,86 +1,339 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Visor de Imágenes Firebase</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>Visor de Imágenes WM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Librerías -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
   <style>
-    body{font-family:sans-serif;margin:20px;background:#f5f5f5}
-    h1{text-align:center}
-    form{display:flex;gap:8px;margin:20px auto;max-width:500px}
-    input,button{padding:10px;border-radius:6px;border:1px solid #ccc}
-    button{cursor:pointer;background:#007bff;color:white;border:none}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;margin-top:20px}
-    .card{background:white;padding:10px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,.1);text-align:center}
-    .card img{width:100%;height:150px;object-fit:cover;border-radius:8px}
-    .title{margin-top:6px;font-size:14px;color:#333}
+    :root{ --bg:#f5f5f5; --card:#fff; --ink:#222; --muted:#666; --accent:#2d6cdf;
+      --chip:#eef4ff; --ok:#0a7; --warn:#d80; --bad:#c22; }
+    *{box-sizing:border-box}
+    body{font-family:Arial, sans-serif; margin:0; background:var(--bg); color:var(--ink);}
+    header{text-align:center; padding:20px 10px; font-weight:700; font-size:1.6rem;}
+    .controls{display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; padding:10px;}
+    input[type="file"],input[type="text"],button{padding:8px 10px; font-size:14px;}
+    button{background:var(--accent); color:#fff; border:0; border-radius:8px; cursor:pointer;}
+    #status{text-align:center; font-size:14px; color:#555; padding:5px 10px;}
+    .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; padding:18px; max-width:1300px; margin:0 auto 30px;}
+    .card{background:var(--card); border-radius:12px; box-shadow:0 3px 10px rgba(0,0,0,.06); overflow:hidden; border:1px solid #eee;}
+    .thumb{width:100%; aspect-ratio:4/3; object-fit:cover; display:block; cursor:pointer;}
+    .meta{padding:10px 12px; font-size:12px; color:#444; display:grid; gap:6px;}
+    .url{color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .kv{display:grid; grid-template-columns:120px 1fr; gap:6px 10px;}
+    .kv b{color:#333;}
+    .chips{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+    .chip{background:var(--chip); padding:3px 8px; border-radius:999px; font-size:11px; border:1px solid #dfe8ff;}
+    .chip.ok{border-color:#bfeee1; background:#f2fffb}
+    .chip.warn{border-color:#ffe3bf; background:#fff8ee}
+    .chip.bad{border-color:#ffd4d4; background:#fff3f3}
+    .btn-link{display:inline-block; padding:6px 10px; font-size:12px; border-radius:8px; border:1px solid #cbd5e1; text-decoration:none;}
+    .btn-link:hover{background:#f1f5f9}
+
+    .modal{display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; align-items:center; justify-content:center;}
+    .modal-inner{display:flex; gap:18px; max-width:94vw; max-height:86vh; align-items:center;}
+    .modal img{max-width:62vw; max-height:80vh; border-radius:10px; background:#000;}
+    .side{background:#111; color:#e9e9e9; padding:12px 14px; border-radius:10px; max-width:28vw; overflow:auto; max-height:80vh; font-size:13px;}
+    .side h4{margin:0 0 8px 0; font-size:14px; color:#fff}
+    .side .url{color:#bbb;}
+    .side .actions{margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;}
+    .close{position:absolute; top:16px; right:22px; font-size:2rem; color:#fff; cursor:pointer; user-select:none;}
+    .nav{position:absolute; top:50%; transform:translateY(-50%); font-size:2.2rem; color:#fff; cursor:pointer; user-select:none; padding:8px 12px;}
+    .prev{left:18px;} .next{right:18px;}
+    #login{text-align:center; margin-top:100px;}
+    #login input{display:block; margin:10px auto; padding:8px;}
+    #app{display:none;}
   </style>
 </head>
 <body>
-  <h1>📷 Galería Firebase</h1>
+  <!-- Login -->
+  <div id="login">
+    <h2>Iniciar Sesión</h2>
+    <input type="text" id="user" placeholder="Usuario">
+    <input type="password" id="pass" placeholder="Contraseña">
+    <button onclick="autenticar()">Entrar</button>
+  </div>
 
-  <form id="form-gallery">
-    <input id="input-url" type="url" placeholder="URL de la imagen" required style="flex:2">
-    <input id="input-title" type="text" placeholder="Título" required style="flex:1">
-    <button type="submit">Agregar</button>
-  </form>
+  <!-- App -->
+  <div id="app">
+    <header>Visor de Imágenes WM</header>
+    <div class="controls">
+      <input type="file" id="excelFile" accept=".xlsx,.csv" />
+      <input type="text" id="nicInput" placeholder="Ingrese NIC (Suscriptor)" />
+      <button id="btnBuscar">Buscar</button>
+    </div>
+    <div id="status">Cargue el archivo (.xlsx o .csv), luego escriba el NIC y presione Buscar.</div>
 
-  <div class="grid" id="gallery"></div>
+    <div class="gallery" id="gallery"></div>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+    <!-- Modal -->
+    <div class="modal" id="modal">
+      <span class="close" id="btnCerrar" title="Cerrar">&times;</span>
+      <span class="nav prev" id="btnPrev" title="Anterior">&#10094;</span>
+      <div class="modal-inner">
+        <img id="modalImg" src="">
+        <div class="side" id="sideMeta">
+          <h4>Detalle</h4>
+          <div class="kv" id="sideKv"></div>
+          <div class="chips" id="sideChips"></div>
+          <div class="actions" id="sideActions"></div>
+          <div class="url" id="sideUrl"></div>
+        </div>
+      </div>
+      <span class="nav next" id="btnNext" title="Siguiente">&#10095;</span>
+    </div>
+  </div>
 
-    // TU CONFIG (copiar de Firebase Console)
-    const firebaseConfig = {
-      apiKey: "TU_API_KEY",
-      authDomain: "TU_AUTH_DOMAIN",
-      projectId: "TU_PROJECT_ID",
-      storageBucket: "TU_STORAGE_BUCKET",
-      messagingSenderId: "TU_SENDER_ID",
-      appId: "TU_APP_ID"
-    };
+<script>
+  // ========= Autenticación =========
+  function autenticar(){
+    const u=document.getElementById("user").value;
+    const p=document.getElementById("pass").value;
+    if(u==="slopezpi" && p==="1234"){
+      document.getElementById("login").style.display="none";
+      document.getElementById("app").style.display="block";
+    } else alert("Usuario o contraseña incorrectos");
+  }
 
-    // Inicializar
-    const app = initializeApp(firebaseConfig);
-    const db  = getFirestore(app);
+  // ========= Utilidades =========
+  const $=id=>document.getElementById(id);
+  const statusMsg=t=>$("status").textContent=t;
 
-    const galleryRef = collection(db, "gallery");
-    const q = query(galleryRef, orderBy("createdAt", "desc"));
+  const clean = (s) =>
+    String(s ?? "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .toLowerCase().replace(/[^a-z0-9# ]+/g,"")
+      .trim();
 
-    const galleryDiv = document.getElementById("gallery");
+  function findKey(obj, candidates){
+    if(!obj) return null;
+    const keys = Object.keys(obj);
+    for(const cand of candidates){
+      const hit = keys.find(k => clean(k) === clean(cand));
+      if(hit) return hit;
+    }
+    for(const k of keys){
+      const ck = clean(k);
+      if(candidates.some(c => ck.includes(clean(c)))) return k;
+    }
+    return null;
+  }
 
-    // Render en tiempo real
-    onSnapshot(q, snap => {
-      galleryDiv.innerHTML = "";
-      snap.forEach(doc => {
-        const data = doc.data();
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = `
-          <img src="${data.url}" alt="${data.titulo}">
-          <div class="title">${data.titulo}</div>
-        `;
-        galleryDiv.appendChild(card);
+  function findUrlKeyByValues(rows){
+    if(!rows?.length) return null;
+    const sample = rows.slice(0, 50);
+    const keys = Object.keys(sample[0] || {});
+    const urlRegex = /(https?:\/\/|\.jpg\b|\.jpeg\b|\.png\b|\/storage\/)/i;
+    for(const k of keys){
+      if(sample.some(r => urlRegex.test(String(r[k] ?? "")))) return k;
+    }
+    return null;
+  }
+
+  // ========= Config =========
+  const CAND_URL = ["Evidencia","URL","Imagen","Image","Foto","LINK","Link"];
+  const CAND_NIC = ["Nic","# Suscriptor","NIC","Suscriptor","NIS","Nº Suscriptor","ID"];
+  const CAND_LAT = ["Latitud","Lat","Latitude"];
+  const CAND_LON = ["Longitud","Lon","Long","Longitude"];
+  const CAND_DIR = ["Dirección","Direccion","Address","Dir"];
+  const CAND_FECHA = ["Fecha de Gestión","FechaGestion","Fecha"]; // <-- Fecha de gestión
+
+  // Orden de atributos
+  const EXTRA_ORDER = [
+    ["# Medidor"],
+    ["Lectura"],
+    ["Lectura Anterior","LecturaAnterior","Anterior"],
+    ["Tipo Magnitud","TipoMagnitud","Magnitud","Tipo"],
+    ["Anomalía","Anomalia"],
+    ["Dirección","Direccion","Address","Dir"],
+    ["Fecha de Gestión","FechaGestion","Fecha"] // <-- agregado aquí
+  ];
+
+  let ALL_ROWS=[], MATCHES=[], urlKey=null, nicKey=null, latKey=null, lonKey=null, dirKey=null, fechaKey=null;
+
+  // ========= Carga de archivo =========
+  $('excelFile').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+
+    const ext = file.name.split('.').pop().toLowerCase();
+    statusMsg(`Leyendo ${file.name}...`);
+
+    try {
+      if(ext === 'csv'){
+        ALL_ROWS = await readCsvAutoEncoding(file);
+      }else if(ext === 'xlsx'){
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type:'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        ALL_ROWS = XLSX.utils.sheet_to_json(sheet, { defval:"" });
+      }else{
+        statusMsg('Formato no soportado. Usa .xlsx o .csv');
+        return;
+      }
+
+      if(!ALL_ROWS.length){ statusMsg('El archivo está vacío o no se pudo parsear.'); return; }
+
+      const sample = ALL_ROWS[0];
+      urlKey = findKey(sample, CAND_URL) || findUrlKeyByValues(ALL_ROWS);
+      nicKey = findKey(sample, CAND_NIC);
+      latKey = findKey(sample, CAND_LAT);
+      lonKey = findKey(sample, CAND_LON);
+      dirKey = findKey(sample, CAND_DIR);
+      fechaKey = findKey(sample, CAND_FECHA);
+
+      if(!urlKey){ statusMsg('No encontré la columna de URL/Evidencia.'); return; }
+      if(!nicKey){ statusMsg('No encontré la columna de NIC.'); return; }
+
+      statusMsg(
+        `Archivo cargado. Columnas → URL: "${urlKey}" | NIC: "${nicKey}"` +
+        `${dirKey?` | Dirección: "${dirKey}"`:""}` +
+        `${fechaKey?` | Fecha de Gestión: "${fechaKey}"`:""}` +
+        `${latKey&&lonKey?` | Lat/Lon: "${latKey}"/"${lonKey}"`:""}.`
+      );
+      $('gallery').innerHTML = '';
+    } catch(err){
+      console.error(err);
+      statusMsg('Error leyendo el archivo. Revise que tenga encabezados.');
+    }
+  });
+
+  function readCsvAutoEncoding(file){
+    return new Promise((resolve, reject) => {
+      const readAs = (enc, then) => {
+        const r = new FileReader();
+        r.onload = () => then(null, r.result);
+        r.onerror = reject;
+        try { r.readAsText(file, enc); } catch(e){ reject(e); }
+      };
+      readAs('utf-8', (err, text) => {
+        if(!text) return resolve([]);
+        if (text.indexOf('\uFFFD') !== -1) {
+          readAs('ISO-8859-1', (err2, text2) => {
+            const parsed = Papa.parse(text2, { header:true, skipEmptyLines:true });
+            resolve(parsed.data);
+          });
+        } else {
+          const parsed = Papa.parse(text, { header:true, skipEmptyLines:true });
+          resolve(parsed.data);
+        }
       });
     });
+  }
 
-    // Agregar imagen
-    document.getElementById("form-gallery").addEventListener("submit", async e => {
-      e.preventDefault();
-      const url   = document.getElementById("input-url").value.trim();
-      const title = document.getElementById("input-title").value.trim();
-      if(!url || !title) return;
+  // ========= Búsqueda por NIC =========
+  $('btnBuscar').addEventListener('click', () => {
+    const q = $('nicInput').value.trim();
+    if(!q){ statusMsg('Escribe un NIC para buscar.'); return; }
+    if(!ALL_ROWS.length){ statusMsg('Primero cargue el archivo.'); return; }
 
-      await addDoc(galleryRef, {
-        url: url,
-        titulo: title,
-        createdAt: serverTimestamp()
-      });
+    const normId = (v) => String(v ?? '').trim().replace(/\s+/g,'');
+    MATCHES = ALL_ROWS.filter(r => normId(r[nicKey]) === normId(q));
 
-      e.target.reset();
+    if(!MATCHES.length){
+      statusMsg(`No hay resultados para NIC: ${q}`);
+      $('gallery').innerHTML = '<div class="empty">Sin resultados.</div>';
+    }else{
+      statusMsg(`Encontradas ${MATCHES.length} filas para NIC ${q}.`);
+      renderGallery(MATCHES);
+    }
+  });
+
+  // ========= Render =========
+  function renderGallery(rows){
+    const g = $('gallery');
+    g.innerHTML = rows.map((row, idx) => {
+      const url = row[urlKey] || '';
+      const info = buildInfoHtml(row);
+      const mapBtn = buildMapButton(row);
+      return `
+        <div class="card">
+          <img class="thumb" data-idx="${idx}" src="${url}" alt="img"/>
+          <div class="meta">
+            ${info.kvHtml}
+            <div class="chips">${info.chipsHtml} ${mapBtn}</div>
+            <div class="url" title="${url}">${url}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    g.querySelectorAll('.thumb').forEach(img => {
+      img.addEventListener('click', ev => openModal(Number(ev.currentTarget.dataset.idx)));
     });
-  </script>
+  }
+
+  function buildInfoHtml(row){
+    let kvHtml = "";
+
+    if(nicKey){
+      kvHtml += `<div class="kv"><b>${nicKey}:</b><span>${escapeHtml(row[nicKey])}</span></div>`;
+    }
+
+    for(const cands of EXTRA_ORDER){
+      const k = findKey(row, cands);
+      if(k && k !== nicKey){
+        kvHtml += `<div class="kv"><b>${escapeHtml(k)}:</b><span>${escapeHtml(row[k])}</span></div>`;
+      }
+    }
+
+    const anomKey = findKey(row, ["Anomalía","Anomalia"]);
+    const anomVal = anomKey ? String(row[anomKey] ?? "") : "";
+    let chipsHtml = "";
+    if(anomVal){
+      let cls = "chip";
+      const v = clean(anomVal);
+      if(/(^ok$|normal|ninguna)/.test(v)) cls += " ok";
+      else if(/(leve|warning|advert)/.test(v)) cls += " warn";
+      else cls += " bad";
+      chipsHtml += `<span class="${cls}">Anomalía: ${escapeHtml(anomVal)}</span>`;
+    }
+
+    return { kvHtml, chipsHtml };
+  }
+
+  function buildMapButton(row){
+    if(!latKey || !lonKey) return "";
+    let lat = row[latKey], lon = row[lonKey];
+    if(lat == null || lon == null || lat === "" || lon === "") return "";
+    lat = String(lat).replace(",","."); lon = String(lon).replace(",",".");
+    const la = Number(lat), lo = Number(lon);
+    if(!isFinite(la) || !isFinite(lo)) return "";
+    const href = `https://www.google.com/maps?q=${la},${lo}`;
+    return `<a class="btn-link" href="${href}" target="_blank" rel="noopener">Ver en Google Maps</a>`;
+  }
+
+  function escapeHtml(v){
+    return String(v ?? '').replace(/[&<>"']/g, s => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[s]));
+  }
+
+  // ========= Modal =========
+  let modalIdx = 0;
+  function openModal(i){
+    modalIdx = i;
+    const row = MATCHES[i];
+    if(!row) return;
+    const url = row[urlKey] || '';
+    $('modalImg').src = url;
+
+    const info = buildInfoHtml(row);
+    $('sideKv').innerHTML = info.kvHtml;
+    $('sideChips').innerHTML = info.chipsHtml;
+    $('sideActions').innerHTML = buildMapButton(row);
+    $('sideUrl').textContent = url;
+    $('sideUrl').title = url;
+
+    $('modal').style.display = 'flex';
+  }
+  $('btnCerrar').onclick = () => $('modal').style.display = 'none';
+  $('btnPrev').onclick = () => { if (modalIdx>0) openModal(modalIdx-1); };
+  $('btnNext').onclick = () => { if (modalIdx<MATCHES.length-1) openModal(modalIdx+1); };
+  window.addEventListener('keydown', e => { if (e.key==='Escape') $('modal').style.display='none'; });
+</script>
 </body>
 </html>
