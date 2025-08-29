@@ -1,136 +1,86 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<title>Demo Firebase + Firestore</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-   body{font-family:system-ui,-apple-system,Arial,sans-serif; margin:24px; max-width:800px}
-   h1{margin:0 0 8px}
-   .muted{color:#666; margin:0 0 16px}
-   form{display:flex; gap:8px; margin:12px 0}
-   input,button{padding:10px 12px}
-   ul{list-style:none; padding:0}
-   li{display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border:1px solid #eee; border-radius:8px; margin:6px 0}
-   code{background:#f5f5f5; padding:2px 6px; border-radius:4px}
-</style>
+  <meta charset="UTF-8">
+  <title>Visor de Imágenes Firebase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body{font-family:sans-serif;margin:20px;background:#f5f5f5}
+    h1{text-align:center}
+    form{display:flex;gap:8px;margin:20px auto;max-width:500px}
+    input,button{padding:10px;border-radius:6px;border:1px solid #ccc}
+    button{cursor:pointer;background:#007bff;color:white;border:none}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:15px;margin-top:20px}
+    .card{background:white;padding:10px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,.1);text-align:center}
+    .card img{width:100%;height:150px;object-fit:cover;border-radius:8px}
+    .title{margin-top:6px;font-size:14px;color:#333}
+  </style>
 </head>
 <body>
-<h1>Demo Firebase + Firestore</h1>
-<p class="muted">Autenticación anónima + lista en tiempo real (colección <code>public</code> y privada por usuario)</p>
-<section id="auth">
-<strong>Estado:</strong> <span id="status">Conectando…</span>
-</section>
-<h2>Colección pública</h2>
-<form id="form-public">
-<input id="input-public" placeholder="Escribe algo público…" required />
-<button type="submit">Agregar</button>
-</form>
-<ul id="list-public"></ul>
-<h2>Tu colección privada</h2>
-<form id="form-private">
-<input id="input-private" placeholder="Escribe algo privado…" required />
-<button type="submit">Agregar</button>
-</form>
-<ul id="list-private"></ul>
-<!-- Firebase SDKs (modular v10+) -->
-<script type="module">
-   // 1) Importar SDKs
-   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-   import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-   import {
-     getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp,
-     doc, deleteDoc
-   } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-   // 2) TU CONFIG (reemplaza con la de tu proyecto)
-   const firebaseConfig = {
-     apiKey: "TU_API_KEY",
-     authDomain: "TU_AUTH_DOMAIN",
-     projectId: "TU_PROJECT_ID",
-     storageBucket: "TU_STORAGE_BUCKET",
-     messagingSenderId: "TU_SENDER_ID",
-     appId: "TU_APP_ID"
-   };
-   // 3) Init
-   const app = initializeApp(firebaseConfig);
-   const auth = getAuth(app);
-   const db   = getFirestore(app);
-   const $status = document.getElementById('status');
-   // 4) Login anónimo
-   signInAnonymously(auth).catch(err => {
-     console.error("Error signInAnonymously:", err);
-     $status.textContent = "Error de autenticación";
-   });
-   onAuthStateChanged(auth, user => {
-     if (user) {
-       $status.textContent = `Autenticado (anónimo). UID: ${user.uid}`;
-       initRealtime(user.uid);
-     } else {
-       $status.textContent = "No autenticado";
-     }
-   });
-   // 5) Listeners + CRUD
-   function initRealtime(uid){
-     // ----- Colección PÚBLICA -----
-     const publicRef = collection(db, "public");
-     const qPublic   = query(publicRef, orderBy("createdAt","desc"));
-     onSnapshot(qPublic, snap => {
-       const $list = document.getElementById('list-public');
-       $list.innerHTML = "";
-       snap.forEach(d => {
-         const li = renderItem(d.id, d.data(), () => deleteDoc(doc(db, "public", d.id)));
-         $list.appendChild(li);
-       });
-     });
-     document.getElementById('form-public').addEventListener('submit', async (e)=>{
-       e.preventDefault();
-       const value = document.getElementById('input-public').value.trim();
-       if(!value) return;
-       await addDoc(publicRef, {
-         text: value,
-         createdAt: serverTimestamp(),
-         by: auth.currentUser?.uid || null
-       });
-       e.target.reset();
-     });
-     // ----- Colección PRIVADA por usuario -----
-     // Ruta: /users/{uid}/items
-     const privateRefPath = `users/${uid}/items`;
-     const privateRef     = collection(db, privateRefPath);
-     const qPrivate       = query(privateRef, orderBy("createdAt","desc"));
-     onSnapshot(qPrivate, snap => {
-       const $list = document.getElementById('list-private');
-       $list.innerHTML = "";
-       snap.forEach(d => {
-         const li = renderItem(d.id, d.data(), () => deleteDoc(doc(db, privateRefPath, d.id)));
-         $list.appendChild(li);
-       });
-     });
-     document.getElementById('form-private').addEventListener('submit', async (e)=>{
-       e.preventDefault();
-       const value = document.getElementById('input-private').value.trim();
-       if(!value) return;
-       await addDoc(privateRef, {
-         text: value,
-         createdAt: serverTimestamp()
-       });
-       e.target.reset();
-     });
-   }
-   // Utilidad para pintar items con botón borrar
-   function renderItem(id, data, onDelete){
-     const li = document.createElement('li');
-     li.innerHTML = `
-<span>${escapeHtml(data.text || "(sin texto)")}</span>
-<button aria-label="Eliminar">🗑️</button>
-     `;
-     li.querySelector("button").onclick = onDelete;
-     return li;
-   }
-   // Pequeña utilidad para evitar inyección de HTML
-   function escapeHtml(s){
-     return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-   }
-</script>
+  <h1>📷 Galería Firebase</h1>
+
+  <form id="form-gallery">
+    <input id="input-url" type="url" placeholder="URL de la imagen" required style="flex:2">
+    <input id="input-title" type="text" placeholder="Título" required style="flex:1">
+    <button type="submit">Agregar</button>
+  </form>
+
+  <div class="grid" id="gallery"></div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+    // TU CONFIG (copiar de Firebase Console)
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      authDomain: "TU_AUTH_DOMAIN",
+      projectId: "TU_PROJECT_ID",
+      storageBucket: "TU_STORAGE_BUCKET",
+      messagingSenderId: "TU_SENDER_ID",
+      appId: "TU_APP_ID"
+    };
+
+    // Inicializar
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    const galleryRef = collection(db, "gallery");
+    const q = query(galleryRef, orderBy("createdAt", "desc"));
+
+    const galleryDiv = document.getElementById("gallery");
+
+    // Render en tiempo real
+    onSnapshot(q, snap => {
+      galleryDiv.innerHTML = "";
+      snap.forEach(doc => {
+        const data = doc.data();
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <img src="${data.url}" alt="${data.titulo}">
+          <div class="title">${data.titulo}</div>
+        `;
+        galleryDiv.appendChild(card);
+      });
+    });
+
+    // Agregar imagen
+    document.getElementById("form-gallery").addEventListener("submit", async e => {
+      e.preventDefault();
+      const url   = document.getElementById("input-url").value.trim();
+      const title = document.getElementById("input-title").value.trim();
+      if(!url || !title) return;
+
+      await addDoc(galleryRef, {
+        url: url,
+        titulo: title,
+        createdAt: serverTimestamp()
+      });
+
+      e.target.reset();
+    });
+  </script>
 </body>
 </html>
