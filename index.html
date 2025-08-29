@@ -336,4 +336,51 @@
   window.addEventListener('keydown', e => { if (e.key==='Escape') $('modal').style.display='none'; });
 </script>
 </body>
+
+  <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+  import { getFirestore, collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+  // ⚠️ Reemplaza con tu configuración de Firebase
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    projectId: "TU_PROJECT_ID",
+    storageBucket: "TU_STORAGE_BUCKET",
+    messagingSenderId: "TU_SENDER_ID",
+    appId: "TU_APP_ID"
+  };
+
+  // Inicializar Firebase
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  // Referencia a la colección "gallery"
+  const galleryRef = collection(db, "gallery");
+  const q = query(galleryRef, orderBy("createdAt","desc"));
+
+  // Escucha en tiempo real
+  onSnapshot(q, snap => {
+    if(snap.empty){
+      $("gallery").innerHTML = "<div class='empty'>No hay imágenes en Firebase.</div>";
+      return;
+    }
+    const rows = snap.docs.map(d => ({
+      url: d.data().url || "",
+      nic: d.data().nic || "",
+      direccion: d.data().direccion || "",
+      fecha: d.data().fecha || ""
+    }));
+    // Render usando tu función existente
+    MATCHES = rows.map(r => ({
+      [urlKey || "url"]: r.url,
+      [nicKey || "NIC"]: r.nic,
+      [dirKey || "Dirección"]: r.direccion,
+      [fechaKey || "Fecha"]: r.fecha
+    }));
+    renderGallery(MATCHES);
+    statusMsg(`Cargadas ${MATCHES.length} imágenes desde Firebase.`);
+  });
+</script>
+
 </html>
