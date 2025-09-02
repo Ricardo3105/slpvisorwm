@@ -2,59 +2,84 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Visor de Imágenes Firebase</title>
+  <title>Visor WM (Firestore)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+  <!-- Exportadores -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+
   <style>
-    :root{ --bg:#f5f5f5; --card:#fff; --ink:#222; --muted:#666; --accent:#2d6cdf;
-      --chip:#eef4ff; --ok:#0a7; --warn:#d80; --bad:#c22; }
+    :root{--bg:#f5f5f5;--card:#fff;--ink:#222;--muted:#666;--accent:#2d6cdf;--chip:#eef4ff}
     *{box-sizing:border-box}
-    body{font-family:Arial, sans-serif; margin:0; background:var(--bg); color:var(--ink);}
-    header{text-align:center; padding:20px 10px; font-weight:700; font-size:1.6rem;}
-    #status{text-align:center; font-size:14px; color:#555; padding:5px 10px;}
-    .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; padding:18px; max-width:1300px; margin:0 auto 30px;}
-    .card{background:var(--card); border-radius:12px; box-shadow:0 3px 10px rgba(0,0,0,.06); overflow:hidden; border:1px solid #eee;}
-    .thumb{width:100%; aspect-ratio:4/3; object-fit:cover; display:block; cursor:pointer;}
-    .meta{padding:10px 12px; font-size:12px; color:#444; display:grid; gap:6px;}
-    .url{color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .kv{display:grid; grid-template-columns:120px 1fr; gap:6px 10px;}
-    .kv b{color:#333;}
-    .chips{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
-    .chip{background:var(--chip); padding:3px 8px; border-radius:999px; font-size:11px; border:1px solid #dfe8ff;}
-    .chip.ok{border-color:#bfeee1; background:#f2fffb}
-    .chip.warn{border-color:#ffe3bf; background:#fff8ee}
-    .chip.bad{border-color:#ffd4d4; background:#fff3f3}
-    .btn-link{display:inline-block; padding:6px 10px; font-size:12px; border-radius:8px; border:1px solid #cbd5e1; text-decoration:none;}
+    body{font-family:Arial, sans-serif;margin:0;background:var(--bg);color:var(--ink)}
+    header{text-align:center;padding:20px 10px;font-weight:700;font-size:1.6rem}
+    .controls{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:10px}
+    input,button{padding:8px 10px;font-size:14px}
+    button{background:var(--accent);color:#fff;border:0;border-radius:8px;cursor:pointer}
+    #status{text-align:center;font-size:14px;color:#555;padding:5px 10px}
+    .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:18px;max-width:1300px;margin:0 auto 30px}
+    .card{background:var(--card);border-radius:12px;box-shadow:0 3px 10px rgba(0,0,0,.06);overflow:hidden;border:1px solid #eee}
+    .thumb{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:pointer}
+    .meta{padding:10px 12px;font-size:12px;color:#444;display:grid;gap:8px}
+    .url{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .kv-card{display:grid;grid-template-columns:120px 1fr;gap:6px 10px}
+    .kv-card .label{color:#333;font-weight:700}
+    .kv-card .value{white-space:pre-wrap;word-break:break-word}
+    .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .chip{background:var(--chip);padding:3px 8px;border-radius:999px;font-size:11px;border:1px solid #dfe8ff}
+    .btn-link{display:inline-block;padding:6px 10px;font-size:12px;border-radius:8px;border:1px solid #cbd5e1;text-decoration:none}
     .btn-link:hover{background:#f1f5f9}
 
-    .modal{display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; align-items:center; justify-content:center;}
-    .modal-inner{display:flex; gap:18px; max-width:94vw; max-height:86vh; align-items:center;}
-    .modal img{max-width:62vw; max-height:80vh; border-radius:10px; background:#000;}
-    .side{background:#111; color:#e9e9e9; padding:12px 14px; border-radius:10px; max-width:28vw; overflow:auto; max-height:80vh; font-size:13px;}
-    .side h4{margin:0 0 8px 0; font-size:14px; color:#fff}
-    .side .url{color:#bbb;}
-    .side .actions{margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;}
-    .close{position:absolute; top:16px; right:22px; font-size:2rem; color:#fff; cursor:pointer; user-select:none;}
-    .nav{position:absolute; top:50%; transform:translateY(-50%); font-size:2.2rem; color:#fff; cursor:pointer; user-select:none; padding:8px 12px;}
-    .prev{left:18px;} .next{right:18px;}
-    #login{text-align:center; margin-top:100px;}
-    #login input{display:block; margin:10px auto; padding:8px;}
-    #app{display:none;}
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;align-items:center;justify-content:center}
+    .modal-inner{display:flex;gap:18px;max-width:94vw;max-height:86vh;align-items:center}
+    .modal img{max-width:62vw;max-height:80vh;border-radius:10px;background:#000}
+    .side{background:#111;color:#e9e9e9;padding:12px 14px;border-radius:10px;max-width:28vw;overflow:auto;max-height:80vh;font-size:13px}
+    .side h4{margin:0 0 8px 0;font-size:14px;color:#fff}
+    .side .url{color:#bbb}
+    .close{position:absolute;top:16px;right:22px;font-size:2rem;color:#fff;cursor:pointer;user-select:none}
+    .nav{position:absolute;top:50%;transform:translateY(-50%);font-size:2.2rem;color:#fff;cursor:pointer;user-select:none;padding:8px 12px}
+    .prev{left:18px}.next{right:18px}
+    #login{text-align:center;margin-top:60px}
+    #login input{display:block;margin:8px auto;padding:8px;width:min(320px,90vw)}
+    #app{display:none}
+    .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 10px;margin:0}
+    .kv dt{color:#cfcfcf;font-weight:700;margin:0}
+    .kv dd{margin:0;color:#fff;white-space:pre-wrap;word-break:break-word}
+
+    .rating{display:grid;gap:8px;padding:8px;border:1px dashed #2d6cdf33;border-radius:10px}
+    .rating .q{font-weight:700;font-size:12px}
+    .rating .opts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .rating .btn{background:#eef4ff;color:#1f2a44;border:1px solid #cbd5e1;border-radius:999px;padding:6px 10px;cursor:pointer;font-size:12px}
+    .rating .btn.on{outline:2px solid #2d6cdf}
+    .rating .saved{font-size:11px;color:#0a7}
   </style>
 </head>
 <body>
   <!-- Login -->
   <div id="login">
     <h2>Iniciar Sesión</h2>
-    <input type="text" id="user" placeholder="Usuario">
+    <input type="email" id="user" placeholder="Correo (Firebase Auth)">
     <input type="password" id="pass" placeholder="Contraseña">
     <button onclick="autenticar()">Entrar</button>
   </div>
 
   <!-- App -->
   <div id="app">
-    <header>Visor de Imágenes Firebase</header>
-    <div id="status">Conectando a Firebase...</div>
+    <header>Visor de Imágenes WM (BD)</header>
+    <div class="controls">
+      <input type="text" id="nicInput" placeholder="Ingrese NIC (Suscriptor)" />
+      <button id="btnBuscar">Buscar</button>
+      <button id="btnExport">Exportar actualizado (.xlsx)</button>
+      <button id="btnExportCSV">Exportar calificaciones (.csv)</button>
+      <button id="btnSalir">Salir</button>
+    </div>
+    <div id="status">Autenticado. Escriba el NIC y presione Buscar.</div>
+
     <div class="gallery" id="gallery"></div>
 
     <!-- Modal -->
@@ -65,7 +90,17 @@
         <img id="modalImg" src="">
         <div class="side" id="sideMeta">
           <h4>Detalle</h4>
-          <div class="kv" id="sideKv"></div>
+          <dl class="kv" id="sideKv"></dl>
+
+          <div class="rating" id="modalRating" style="margin-top:8px;">
+            <div class="q">¿La foto te sirvió para tomar la decisión?</div>
+            <div class="opts">
+              <button class="btn" data-v="Sí">Sí</button>
+              <button class="btn" data-v="No">No</button>
+              <span class="saved" id="modalSaved" style="display:none">✔ guardado</span>
+            </div>
+          </div>
+
           <div class="chips" id="sideChips"></div>
           <div class="actions" id="sideActions"></div>
           <div class="url" id="sideUrl"></div>
@@ -76,33 +111,173 @@
   </div>
 
 <script>
-  // ========= Autenticación sencilla =========
+  /*************** Firebase ***************/
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    projectId: "TU_PROJECT_ID",
+    storageBucket: "TU_BUCKET",
+    messagingSenderId: "TU_SENDER_ID",
+    appId: "TU_APP_ID",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+  const { serverTimestamp } = firebase.firestore.FieldValue;
+
+  /*************** Autenticación ***************/
+  let CURRENT_USER = null;   // email visible
+  let CURRENT_UID  = null;   // uid para ratings
+
   function autenticar(){
-    const u=document.getElementById("user").value;
-    const p=document.getElementById("pass").value;
-    if(u==="slopezpi" && p==="1234"){
-      document.getElementById("login").style.display="none";
-      document.getElementById("app").style.display="block";
-    } else alert("Usuario o contraseña incorrectos");
+    const email = document.getElementById("user").value.trim();
+    const pass  = document.getElementById("pass").value;
+    if(!email || !pass){ alert("Ingrese correo y contraseña"); return; }
+    auth.signInWithEmailAndPassword(email, pass)
+      .then(cred=>{
+        CURRENT_USER = cred.user.email || "usuario";
+        CURRENT_UID  = cred.user.uid;
+        document.getElementById("login").style.display="none";
+        document.getElementById("app").style.display="block";
+        statusMsg(`Sesión iniciada como ${CURRENT_USER}.`);
+      })
+      .catch(err=>{
+        console.error(err);
+        alert("No se pudo iniciar sesión: " + err.message);
+      });
   }
 
+  document.getElementById("btnSalir").addEventListener("click", ()=>{
+    auth.signOut().then(()=>{
+      CURRENT_USER = null; CURRENT_UID = null;
+      document.getElementById("app").style.display="none";
+      document.getElementById("login").style.display="block";
+    });
+  });
+
+  /*************** Utils ***************/
   const $=id=>document.getElementById(id);
   const statusMsg=t=>$("status").textContent=t;
+  const pad2=n=>String(n).padStart(2,'0');
+  const clean=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
 
-  let MATCHES=[];
-  let modalIdx=0;
+  function formatFechaDMY(val){
+    // val es Timestamp de Firestore
+    if(!val || typeof val.toDate!=="function") return "";
+    const d = val.toDate();
+    return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
 
-  function renderGallery(rows){
-    const g=$("gallery");
+  function escapeHtml(v){
+    return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  }
+  const safe = v => v==null ? "" : v;
+
+  /*************** Búsqueda por NIC ***************/
+  let MATCHES = []; // [{id, ...photo}]
+  let CURRENT_NIC = "";
+
+  $('btnBuscar').addEventListener('click', async ()=>{
+    const q = $('nicInput').value.trim();
+    if(!q){ statusMsg('Escribe un NIC para buscar.'); return; }
+    if(!auth.currentUser){ alert('Primero inicia sesión.'); return; }
+
+    statusMsg(`Buscando NIC ${q}...`);
+    try{
+      const snap = await db.collection('photos').where('nic','==', q).get();
+      const rows = [];
+      snap.forEach(doc=> rows.push({ id: doc.id, ...doc.data() }));
+
+      MATCHES = rows;
+      CURRENT_NIC = q;
+
+      if(!rows.length){
+        statusMsg(`No hay resultados para NIC: ${q}`);
+        $('gallery').innerHTML = '<div class="empty">Sin resultados.</div>';
+      }else{
+        statusMsg(`Encontradas ${rows.length} filas para NIC ${q}.`);
+        renderGallery(rows);
+      }
+    }catch(err){
+      console.error(err);
+      statusMsg('Error consultando Firestore.');
+    }
+  });
+
+  /*************** Render ***************/
+  function infoRows(row){
+    return [
+      ["NIC", safe(row.nic)],
+      ["Dirección", safe(row.direccion)],
+      ["Fecha de Gestión", formatFechaDMY(row.fechaGestion)],
+      ["# Medidor", safe(row.medidor)],
+      ["Lectura", safe(row.lectura)],
+      ["Lectura Anterior", safe(row.lecturaAnterior)],
+      ["Tipo Magnitud", safe(row.tipoMagnitud)],
+      ["Anomalía", safe(row.anomalia)]
+    ];
+  }
+
+  function anomalyChip(row){
+    const val = String(row.anomalia ?? "");
+    if(!val) return "";
+    let cls = "chip";
+    const v = clean(val);
+    if(/(^ok$|normal|ninguna)/.test(v)) cls += " ok";
+    else if(/(leve|warning|advert)/.test(v)) cls += " warn";
+    else cls += " bad";
+    return `<span class="${cls}">Anomalía: ${escapeHtml(val)}</span>`;
+  }
+
+  function buildMapButton(row){
+    // lat / lon son string
+    const lat = String(row.lat ?? "").replace(",",".");
+    const lon = String(row.lon ?? "").replace(",",".");
+    const la = parseFloat(lat), lo = parseFloat(lon);
+    if(!isFinite(la) || !isFinite(lo)) return "";
+    const href = `https://www.google.com/maps?q=${la},${lo}`;
+    return `<a class="btn-link" href="${href}" target="_blank" rel="noopener">Ver en Google Maps</a>`;
+  }
+
+  async function getMyRatingForPhoto(photoId){
+    if(!CURRENT_UID) return null;
+    const doc = await db.collection('photos').doc(photoId).collection('ratings').doc(CURRENT_UID).get();
+    return doc.exists ? (doc.data()?.value || null) : null;
+  }
+
+  function ratingBlockHTML(photoId, selected){
+    return `
+      <div class="rating" data-photo="${escapeHtml(photoId)}">
+        <div class="q">¿La foto te sirvió para tomar la decisión?</div>
+        <div class="opts">
+          <button class="btn rate ${selected==='Sí'?'on':''}" data-v="Sí">Sí</button>
+          <button class="btn rate ${selected==='No'?'on':''}" data-v="No">No</button>
+          <span class="saved" style="display:${selected?'inline':'none'}">✔ guardado</span>
+        </div>
+      </div>`;
+  }
+
+  async function renderGallery(rows){
+    const ratings = {};
+    await Promise.all(rows.map(async r=>{ ratings[r.id] = await getMyRatingForPhoto(r.id); }));
+
+    const g = $('gallery');
     g.innerHTML = rows.map((row, idx) => {
       const url = row.url || '';
+      const kvHtml = infoRows(row).map(([k,v]) =>
+        `<span class="label">${escapeHtml(k)}:</span><span class="value">${escapeHtml(v)}</span>`
+      ).join('');
+      const mapBtn = buildMapButton(row);
+      const chips = anomalyChip(row);
+      const rating = ratings[row.id] || null;
+
       return `
-        <div class="card">
+        <div class="card" data-photo="${escapeHtml(row.id)}">
           <img class="thumb" data-idx="${idx}" src="${url}" alt="img"/>
           <div class="meta">
-            ${row.nic ? `<div class="kv"><b>NIC:</b><span>${row.nic}</span></div>`:""}
-            ${row.direccion ? `<div class="kv"><b>Dirección:</b><span>${row.direccion}</span></div>`:""}
-            ${row.fecha ? `<div class="kv"><b>Fecha:</b><span>${row.fecha}</span></div>`:""}
+            <div class="kv-card">${kvHtml}</div>
+            ${ratingBlockHTML(row.id, rating)}
+            <div class="chips">${chips} ${mapBtn}</div>
             <div class="url" title="${url}">${url}</div>
           </div>
         </div>`;
@@ -111,82 +286,154 @@
     g.querySelectorAll('.thumb').forEach(img => {
       img.addEventListener('click', ev => openModal(Number(ev.currentTarget.dataset.idx)));
     });
+    attachRatingHandlers(g);
   }
 
-  function openModal(i){
-    modalIdx=i;
-    const row=MATCHES[i];
-    if(!row) return;
-    $("modalImg").src=row.url;
-    $("sideKv").innerHTML=`
-      ${row.nic?`<div class="kv"><b>NIC:</b><span>${row.nic}</span></div>`:""}
-      ${row.direccion?`<div class="kv"><b>Dirección:</b><span>${row.direccion}</span></div>`:""}
-      ${row.fecha?`<div class="kv"><b>Fecha:</b><span>${row.fecha}</span></div>`:""}
-    `;
-    $("sideChips").innerHTML="";
-    $("sideActions").innerHTML="";
-    $("sideUrl").textContent=row.url;
-    $("sideUrl").title=row.url;
-    $("modal").style.display="flex";
+  function attachRatingHandlers(rootEl){
+    rootEl.querySelectorAll('.rating .rate').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const container = e.currentTarget.closest('.rating');
+        const photoId = container.dataset.photo;
+        const val = e.currentTarget.dataset.v;
+        await saveRating(photoId, val);
+        container.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
+        e.currentTarget.classList.add('on');
+        const saved = container.querySelector('.saved');
+        if(saved){ saved.style.display = 'inline'; }
+      });
+    });
   }
 
-  $("btnCerrar").onclick=()=>$("modal").style.display="none";
-  $("btnPrev").onclick=()=>{if(modalIdx>0)openModal(modalIdx-1);};
-  $("btnNext").onclick=()=>{if(modalIdx<MATCHES.length-1)openModal(modalIdx+1);};
-  window.addEventListener('keydown',e=>{if(e.key==='Escape')$("modal").style.display='none';});
-</script>
+  /*************** Modal ***************/
+  let modalIdx = 0;
 
-<!-- Firebase -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-  import { getFirestore, collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  async function openModal(i){
+    modalIdx = i;
+    const row = MATCHES[i]; if(!row) return;
+    $('modalImg').src = row.url || '';
 
-  // ⚠️ Pega aquí tu configuración de Firebase
- /* const firebaseConfig = {
-    apiKey: "AIzaSyCg89cI09FYVighH86bVA1WrK24XpoQsrg",
-    authDomain: "slpvisor.firebaseapp.com",
-    projectId: "slpvisor",
-    storageBucket: "slpvisor.appspot.com",
-    messagingSenderId: "294950446015",
-    appId: "TU_APP_ID"
-  };*/
+    $('sideKv').innerHTML = infoRows(row).map(([k,v]) =>
+      `<dt>${escapeHtml(k)}:</dt><dd>${escapeHtml(v)}</dd>`
+    ).join('');
 
-    // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyCg89cI09FYVighH86bVA1WrK24XpoQsrg",
-    authDomain: "slpvisor.firebaseapp.com",
-    projectId: "slpvisor",
-    storageBucket: "slpvisor.firebasestorage.app",
-    messagingSenderId: "294950446015",
-    appId: "1:294950446015:web:a19276d9dc69c58b58370a",
-    measurementId: "G-Z9MSKJ2VWQ"
-  };
+    $('sideActions').innerHTML = buildMapButton(row);
+    $('sideUrl').textContent = row.url || '';
+    $('sideUrl').title = row.url || '';
 
-/*    // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);*/
+    const ratingVal = await getMyRatingForPhoto(row.id);
+    const modalRating = $('modalRating');
+    modalRating.setAttribute('data-photo', row.id);
+    modalRating.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
+    $('modalSaved').style.display = ratingVal ? 'inline' : 'none';
+    if(ratingVal) modalRating.querySelector(`.rate[data-v="${ratingVal}"]`)?.classList.add('on');
 
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
+    $('modal').style.display = 'flex';
+  }
+  $('btnCerrar').onclick = () => $('modal').style.display = 'none';
+  $('btnPrev').onclick = () => { if (modalIdx>0) openModal(modalIdx-1); };
+  $('btnNext').onclick = () => { if (modalIdx<MATCHES.length-1) openModal(modalIdx+1); };
+  window.addEventListener('keydown', e => { if (e.key==='Escape') $('modal').style.display='none'; });
 
-  const galleryRef = collection(db,"gallery");
-  const q = query(galleryRef, orderBy("createdAt","desc"));
+  document.querySelectorAll('#modalRating .rate').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const container = e.currentTarget.closest('#modalRating');
+      const photoId = container.getAttribute('data-photo');
+      const val = e.currentTarget.dataset.v;
+      await saveRating(photoId, val);
+      container.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
+      e.currentTarget.classList.add('on');
+      $('modalSaved').style.display='inline';
+      if(MATCHES?.length) renderGallery(MATCHES);
+    });
+  });
 
-  onSnapshot(q,snap=>{
-    if(snap.empty){
-      statusMsg("No hay imágenes en Firebase.");
-      $("gallery").innerHTML="<div class='empty'>Sin resultados.</div>";
-      return;
+  /*************** Guardar calificación ***************/
+  async function saveRating(photoId, value){
+    if(!CURRENT_UID){ alert("Primero inicia sesión."); return; }
+    try{
+      const ratingRef = db.collection('photos').doc(photoId).collection('ratings').doc(CURRENT_UID);
+      await ratingRef.set({
+        value,                         // "Sí" o "No"
+        user: CURRENT_USER || "usuario",
+        ts: serverTimestamp()
+      }, { merge: true });
+    }catch(err){
+      console.error(err);
+      alert("No se pudo guardar la calificación.");
     }
-    MATCHES = snap.docs.map(d=>({
-      url:d.data().url || "",
-      nic:d.data().nic || "",
-      direccion:d.data().direccion || "",
-      fecha:d.data().fecha || ""
+  }
+
+  /*************** Exportar XLSX (datos + tu rating) ***************/
+  $('btnExport').addEventListener('click', async () => {
+    if(!MATCHES.length){ alert('Primero haga una búsqueda.'); return; }
+
+    const myRatings = {};
+    await Promise.all(MATCHES.map(async p=>{
+      const r = await db.collection('photos').doc(p.id).collection('ratings').doc(CURRENT_UID).get();
+      if(r.exists) myRatings[p.id] = r.data();
     }));
-    renderGallery(MATCHES);
-    statusMsg(`Cargadas ${MATCHES.length} imágenes desde Firebase.`);
+
+    const rows = MATCHES.map(p=>{
+      const rt = myRatings[p.id];
+      const d = rt?.ts?.toDate ? rt.ts.toDate() : null;
+      return {
+        NIC: p.nic || "",
+        URL: p.url || "",
+        "Dirección": p.direccion || "",
+        "Fecha de Gestión": formatFechaDMY(p.fechaGestion),
+        "# Medidor": p.medidor || "",
+        "Lectura": p.lectura || "",
+        "Lectura Anterior": p.lecturaAnterior || "",
+        "Tipo Magnitud": p.tipoMagnitud || "",
+        "Anomalía": p.anomalia || "",
+        Lat: p.lat || "",
+        Lon: p.lon || "",
+        Pregunta: "¿La foto te sirvió para tomar la decisión?",
+        Calificación: rt?.value || "",
+        "Calificado por": rt?.user || (CURRENT_USER||""),
+        "Fecha Calificación": d ? `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}` : ""
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows, {cellDates:false});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `NIC_${CURRENT_NIC||''}`);
+    XLSX.writeFile(wb, `datos_actualizados_${CURRENT_NIC||'consulta'}.xlsx`);
+  });
+
+  /*************** Exportar CSV (solo ratings) ***************/
+  $('btnExportCSV').addEventListener('click', async () => {
+    if(!MATCHES.length){ alert('Primero haga una búsqueda.'); return; }
+
+    const rows = [];
+    for(const p of MATCHES){
+      const r = await db.collection('photos').doc(p.id).collection('ratings').doc(CURRENT_UID).get();
+      if(r.exists){
+        const rt = r.data();
+        const d = rt?.ts?.toDate ? rt.ts.toDate() : null;
+        rows.push({
+          NIC: p.nic || "",
+          URL: p.url || "",
+          Pregunta: "¿La foto te sirvió para tomar la decisión?",
+          Calificacion: rt.value || "",
+          "Calificado por": rt.user || (CURRENT_USER||""),
+          "Fecha Calificacion": d ? `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}` : ""
+        });
+      }
+    }
+    if(rows.length===0){ alert('Aún no hay calificaciones para exportar.'); return; }
+
+    const headers = ["NIC","URL","Pregunta","Calificacion","Calificado por","Fecha Calificacion"];
+    const esc = v => `"${String(v??"").replace(/"/g,'""')}"`;
+    const csv = [ headers.join(","), ...rows.map(r => headers.map(h => esc(r[h])).join(",")) ].join("\r\n");
+
+    const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `calificaciones_${CURRENT_NIC||'consulta'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   });
 </script>
 </body>
