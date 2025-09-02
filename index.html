@@ -2,16 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Visor WM (Firestore)</title>
+  <title>Visor WM (Realtime Database)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Exportadores -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  <!-- Firebase (compat) -->
+  <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 
   <style>
     :root{--bg:#f5f5f5;--card:#fff;--ink:#222;--muted:#666;--accent:#2d6cdf;--chip:#eef4ff}
@@ -70,7 +68,7 @@
 
   <!-- App -->
   <div id="app">
-    <header>Visor de Imágenes WM (BD)</header>
+    <header>Visor de Imágenes WM (RTDB)</header>
     <div class="controls">
       <input type="text" id="nicInput" placeholder="Ingrese NIC (Suscriptor)" />
       <button id="btnBuscar">Buscar</button>
@@ -101,7 +99,6 @@
             </div>
           </div>
 
-          <div class="chips" id="sideChips"></div>
           <div class="actions" id="sideActions"></div>
           <div class="url" id="sideUrl"></div>
         </div>
@@ -111,26 +108,23 @@
   </div>
 
 <script>
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyAGIEGzyYHDjuj9FKJJSIIdwvLS3J88riU",
-  authDomain: "slpviwer.firebaseapp.com",
-  projectId: "slpviwer",
-  storageBucket: "slpviwer.firebasestorage.app",
-  messagingSenderId: "610447764877",
-  appId: "1:610447764877:web:1ee6d0ca497260ed1fa1c4",
-  measurementId: "G-BFE1G7DCXD"
-};
-  
+  /*************** Firebase RTDB ***************/
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_AUTH_DOMAIN",
+    projectId: "TU_PROJECT_ID",
+    databaseURL: "https://TU_DB_ID.firebaseio.com", // <-- MUY IMPORTANTE
+    storageBucket: "TU_BUCKET",
+    messagingSenderId: "TU_SENDER_ID",
+    appId: "TU_APP_ID",
+  };
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
-  const db   = firebase.firestore();
-  const { serverTimestamp } = firebase.firestore.FieldValue;
+  const rtdb = firebase.database();
 
-  /*************** Autenticación ***************/
-  let CURRENT_USER = null;   // email visible
-  let CURRENT_UID  = null;   // uid para ratings
+  /*************** Auth ***************/
+  let CURRENT_USER = null;
+  let CURRENT_UID  = null;
 
   function autenticar(){
     const email = document.getElementById("user").value.trim();
@@ -144,15 +138,11 @@ const firebaseConfig = {
         document.getElementById("app").style.display="block";
         statusMsg(`Sesión iniciada como ${CURRENT_USER}.`);
       })
-      .catch(err=>{
-        console.error(err);
-        alert("No se pudo iniciar sesión: " + err.message);
-      });
+      .catch(err=>alert("No se pudo iniciar sesión: "+err.message));
   }
-
   document.getElementById("btnSalir").addEventListener("click", ()=>{
     auth.signOut().then(()=>{
-      CURRENT_USER = null; CURRENT_UID = null;
+      CURRENT_USER=null; CURRENT_UID=null;
       document.getElementById("app").style.display="none";
       document.getElementById("login").style.display="block";
     });
@@ -162,35 +152,38 @@ const firebaseConfig = {
   const $=id=>document.getElementById(id);
   const statusMsg=t=>$("status").textContent=t;
   const pad2=n=>String(n).padStart(2,'0');
-  const clean=s=>String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
 
-  function formatFechaDMY(val){
-    // val es Timestamp de Firestore
-    if(!val || typeof val.toDate!=="function") return "";
-    const d = val.toDate();
-    return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  // fechaGestion en RTDB: usamos milisegundos (Number) o ISO string
+  function formatFecha(val){
+    if(val==null || val==="") return "";
+    if(typeof val==="number"){ const d=new Date(val);
+      return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    }
+    const d=new Date(String(val));
+    if(!isNaN(d)) return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    return String(val);
   }
+  function escapeHtml(v){return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
+  const safe=v=>v==null?"":v;
 
-  function escapeHtml(v){
-    return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-  }
-  const safe = v => v==null ? "" : v;
+  /*************** Consulta por NIC (RTDB) ***************/
+  let MATCHES=[], CURRENT_NIC="";
 
-  /*************** Búsqueda por NIC ***************/
-  let MATCHES = []; // [{id, ...photo}]
-  let CURRENT_NIC = "";
-
-  $('btnBuscar').addEventListener('click', async ()=>{
+  document.getElementById('btnBuscar').addEventListener('click', async ()=>{
     const q = $('nicInput').value.trim();
     if(!q){ statusMsg('Escribe un NIC para buscar.'); return; }
     if(!auth.currentUser){ alert('Primero inicia sesión.'); return; }
 
-    statusMsg(`Buscando NIC ${q}...`);
+    statusMsg(`Buscando NIC ${q} en RTDB...`);
     try{
-      const snap = await db.collection('photos').where('nic','==', q).get();
-      const rows = [];
-      snap.forEach(doc=> rows.push({ id: doc.id, ...doc.data() }));
-
+      const ref = rtdb.ref('photos').orderByChild('nic').equalTo(q);
+      const snap = await ref.get();
+      const rows=[];
+      if(snap.exists()){
+        snap.forEach(child=>{
+          rows.push({ id: child.key, ...child.val() });
+        });
+      }
       MATCHES = rows;
       CURRENT_NIC = q;
 
@@ -201,9 +194,9 @@ const firebaseConfig = {
         statusMsg(`Encontradas ${rows.length} filas para NIC ${q}.`);
         renderGallery(rows);
       }
-    }catch(err){
-      console.error(err);
-      statusMsg('Error consultando Firestore.');
+    }catch(e){
+      console.error(e);
+      statusMsg('Error consultando RTDB.');
     }
   });
 
@@ -212,7 +205,7 @@ const firebaseConfig = {
     return [
       ["NIC", safe(row.nic)],
       ["Dirección", safe(row.direccion)],
-      ["Fecha de Gestión", formatFechaDMY(row.fechaGestion)],
+      ["Fecha de Gestión", formatFecha(row.fechaGestion)],
       ["# Medidor", safe(row.medidor)],
       ["Lectura", safe(row.lectura)],
       ["Lectura Anterior", safe(row.lecturaAnterior)],
@@ -221,19 +214,7 @@ const firebaseConfig = {
     ];
   }
 
-  function anomalyChip(row){
-    const val = String(row.anomalia ?? "");
-    if(!val) return "";
-    let cls = "chip";
-    const v = clean(val);
-    if(/(^ok$|normal|ninguna)/.test(v)) cls += " ok";
-    else if(/(leve|warning|advert)/.test(v)) cls += " warn";
-    else cls += " bad";
-    return `<span class="${cls}">Anomalía: ${escapeHtml(val)}</span>`;
-  }
-
   function buildMapButton(row){
-    // lat / lon son string
     const lat = String(row.lat ?? "").replace(",",".");
     const lon = String(row.lon ?? "").replace(",",".");
     const la = parseFloat(lat), lo = parseFloat(lon);
@@ -242,10 +223,10 @@ const firebaseConfig = {
     return `<a class="btn-link" href="${href}" target="_blank" rel="noopener">Ver en Google Maps</a>`;
   }
 
-  async function getMyRatingForPhoto(photoId){
+  async function getMyRating(photoId){
     if(!CURRENT_UID) return null;
-    const doc = await db.collection('photos').doc(photoId).collection('ratings').doc(CURRENT_UID).get();
-    return doc.exists ? (doc.data()?.value || null) : null;
+    const snap = await rtdb.ref(`ratings/${photoId}/${CURRENT_UID}/value`).get();
+    return snap.exists() ? snap.val() : null;
   }
 
   function ratingBlockHTML(photoId, selected){
@@ -262,7 +243,7 @@ const firebaseConfig = {
 
   async function renderGallery(rows){
     const ratings = {};
-    await Promise.all(rows.map(async r=>{ ratings[r.id] = await getMyRatingForPhoto(r.id); }));
+    await Promise.all(rows.map(async r=>{ ratings[r.id] = await getMyRating(r.id); }));
 
     const g = $('gallery');
     g.innerHTML = rows.map((row, idx) => {
@@ -271,7 +252,6 @@ const firebaseConfig = {
         `<span class="label">${escapeHtml(k)}:</span><span class="value">${escapeHtml(v)}</span>`
       ).join('');
       const mapBtn = buildMapButton(row);
-      const chips = anomalyChip(row);
       const rating = ratings[row.id] || null;
 
       return `
@@ -280,7 +260,7 @@ const firebaseConfig = {
           <div class="meta">
             <div class="kv-card">${kvHtml}</div>
             ${ratingBlockHTML(row.id, rating)}
-            <div class="chips">${chips} ${mapBtn}</div>
+            <div class="actions">${mapBtn}</div>
             <div class="url" title="${url}">${url}</div>
           </div>
         </div>`;
@@ -309,21 +289,18 @@ const firebaseConfig = {
 
   /*************** Modal ***************/
   let modalIdx = 0;
-
   async function openModal(i){
     modalIdx = i;
     const row = MATCHES[i]; if(!row) return;
     $('modalImg').src = row.url || '';
-
     $('sideKv').innerHTML = infoRows(row).map(([k,v]) =>
       `<dt>${escapeHtml(k)}:</dt><dd>${escapeHtml(v)}</dd>`
     ).join('');
-
     $('sideActions').innerHTML = buildMapButton(row);
     $('sideUrl').textContent = row.url || '';
     $('sideUrl').title = row.url || '';
 
-    const ratingVal = await getMyRatingForPhoto(row.id);
+    const ratingVal = await getMyRating(row.id);
     const modalRating = $('modalRating');
     modalRating.setAttribute('data-photo', row.id);
     modalRating.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
@@ -350,40 +327,33 @@ const firebaseConfig = {
     });
   });
 
-  /*************** Guardar calificación ***************/
+  /*************** Guardar calificación (RTDB) ***************/
   async function saveRating(photoId, value){
     if(!CURRENT_UID){ alert("Primero inicia sesión."); return; }
-    try{
-      const ratingRef = db.collection('photos').doc(photoId).collection('ratings').doc(CURRENT_UID);
-      await ratingRef.set({
-        value,                         // "Sí" o "No"
-        user: CURRENT_USER || "usuario",
-        ts: serverTimestamp()
-      }, { merge: true });
-    }catch(err){
-      console.error(err);
-      alert("No se pudo guardar la calificación.");
-    }
+    const ref = rtdb.ref(`ratings/${photoId}/${CURRENT_UID}`);
+    const nowMs = Date.now();
+    await ref.update({
+      value,                      // "Sí" o "No"
+      user: CURRENT_USER || "",
+      ts: nowMs                   // guardamos en ms
+    });
   }
 
-  /*************** Exportar XLSX (datos + tu rating) ***************/
-  $('btnExport').addEventListener('click', async () => {
+  /*************** Exportar XLSX y CSV ***************/
+  document.getElementById('btnExport').addEventListener('click', async ()=>{
     if(!MATCHES.length){ alert('Primero haga una búsqueda.'); return; }
 
-    const myRatings = {};
-    await Promise.all(MATCHES.map(async p=>{
-      const r = await db.collection('photos').doc(p.id).collection('ratings').doc(CURRENT_UID).get();
-      if(r.exists) myRatings[p.id] = r.data();
-    }));
-
-    const rows = MATCHES.map(p=>{
-      const rt = myRatings[p.id];
-      const d = rt?.ts?.toDate ? rt.ts.toDate() : null;
-      return {
+    // leer ratings del usuario actual para estas fotos
+    const rows = [];
+    for(const p of MATCHES){
+      const snap = await rtdb.ref(`ratings/${p.id}/${CURRENT_UID}`).get();
+      const rt = snap.exists()? snap.val() : null;
+      const d = rt?.ts ? new Date(rt.ts) : null;
+      rows.push({
         NIC: p.nic || "",
         URL: p.url || "",
         "Dirección": p.direccion || "",
-        "Fecha de Gestión": formatFechaDMY(p.fechaGestion),
+        "Fecha de Gestión": formatFecha(p.fechaGestion),
         "# Medidor": p.medidor || "",
         "Lectura": p.lectura || "",
         "Lectura Anterior": p.lecturaAnterior || "",
@@ -392,51 +362,39 @@ const firebaseConfig = {
         Lat: p.lat || "",
         Lon: p.lon || "",
         Pregunta: "¿La foto te sirvió para tomar la decisión?",
-        Calificación: rt?.value || "",
+        "Calificación": rt?.value || "",
         "Calificado por": rt?.user || (CURRENT_USER||""),
         "Fecha Calificación": d ? `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}` : ""
-      };
-    });
-
+      });
+    }
     const ws = XLSX.utils.json_to_sheet(rows, {cellDates:false});
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `NIC_${CURRENT_NIC||''}`);
     XLSX.writeFile(wb, `datos_actualizados_${CURRENT_NIC||'consulta'}.xlsx`);
   });
 
-  /*************** Exportar CSV (solo ratings) ***************/
-  $('btnExportCSV').addEventListener('click', async () => {
+  document.getElementById('btnExportCSV').addEventListener('click', async ()=>{
     if(!MATCHES.length){ alert('Primero haga una búsqueda.'); return; }
-
-    const rows = [];
+    const out=[];
     for(const p of MATCHES){
-      const r = await db.collection('photos').doc(p.id).collection('ratings').doc(CURRENT_UID).get();
-      if(r.exists){
-        const rt = r.data();
-        const d = rt?.ts?.toDate ? rt.ts.toDate() : null;
-        rows.push({
-          NIC: p.nic || "",
-          URL: p.url || "",
-          Pregunta: "¿La foto te sirvió para tomar la decisión?",
-          Calificacion: rt.value || "",
+      const snap = await rtdb.ref(`ratings/${p.id}/${CURRENT_UID}`).get();
+      if(snap.exists()){
+        const rt=snap.val(); const d=rt.ts?new Date(rt.ts):null;
+        out.push({
+          NIC:p.nic||"", URL:p.url||"",
+          Pregunta:"¿La foto te sirvió para tomar la decisión?",
+          Calificacion: rt.value||"",
           "Calificado por": rt.user || (CURRENT_USER||""),
-          "Fecha Calificacion": d ? `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}` : ""
+          "Fecha Calificacion": d?`${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}`:""
         });
       }
     }
-    if(rows.length===0){ alert('Aún no hay calificaciones para exportar.'); return; }
-
-    const headers = ["NIC","URL","Pregunta","Calificacion","Calificado por","Fecha Calificacion"];
-    const esc = v => `"${String(v??"").replace(/"/g,'""')}"`;
-    const csv = [ headers.join(","), ...rows.map(r => headers.map(h => esc(r[h])).join(",")) ].join("\r\n");
-
-    const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `calificaciones_${CURRENT_NIC||'consulta'}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if(!out.length){ alert('Aún no hay calificaciones para exportar.'); return; }
+    const headers=["NIC","URL","Pregunta","Calificacion","Calificado por","Fecha Calificacion"];
+    const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+    const csv=[headers.join(","), ...out.map(r=>headers.map(h=>esc(r[h])).join(","))].join("\r\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=`calificaciones_${CURRENT_NIC||'consulta'}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   });
 </script>
 </body>
