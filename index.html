@@ -2,402 +2,313 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Visor WM (Realtime Database)</title>
+  <title>Visor de Imágenes WM (PostgreSQL)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-  <!-- Firebase compat -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-database-compat.js"></script>
 
   <style>
-    :root{--bg:#f5f5f5;--card:#fff;--ink:#222;--muted:#666;--accent:#2d6cdf;--chip:#eef4ff}
+    :root{ --bg:#f5f5f5; --card:#fff; --ink:#222; --muted:#666; --accent:#2d6cdf;
+      --chip:#eef4ff; --ok:#0a7; --warn:#d80; --bad:#c22; }
     *{box-sizing:border-box}
-    body{font-family:Arial, sans-serif;margin:0;background:var(--bg);color:var(--ink)}
-    header{text-align:center;padding:20px 10px;font-weight:700;font-size:1.6rem}
-    .controls{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:10px}
-    input,button{padding:8px 10px;font-size:14px}
-    button{background:var(--accent);color:#fff;border:0;border-radius:8px;cursor:pointer}
-    #status{text-align:center;font-size:14px;color:#555;padding:5px 10px}
-    .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:18px;max-width:1300px;margin:0 auto 30px}
-    .card{background:var(--card);border-radius:12px;box-shadow:0 3px 10px rgba(0,0,0,.06);overflow:hidden;border:1px solid #eee}
-    .thumb{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;cursor:pointer}
-    .meta{padding:10px 12px;font-size:12px;color:#444;display:grid;gap:8px}
-    .url{color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .kv-card{display:grid;grid-template-columns:120px 1fr;gap:6px 10px}
-    .kv-card .label{color:#333;font-weight:700}
-    .kv-card .value{white-space:pre-wrap;word-break:break-word}
-    .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-    .chip{background:var(--chip);padding:3px 8px;border-radius:999px;font-size:11px;border:1px solid #dfe8ff}
-    .btn-link{display:inline-block;padding:6px 10px;font-size:12px;border-radius:8px;border:1px solid #cbd5e1;text-decoration:none}
+    body{font-family:Arial, sans-serif; margin:0; background:var(--bg); color:var(--ink);}
+    header{text-align:center; padding:20px 10px; font-weight:700; font-size:1.6rem;}
+    .controls{display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; padding:10px;}
+    input[type="text"],button{padding:8px 10px; font-size:14px;}
+    button{background:var(--accent); color:#fff; border:0; border-radius:8px; cursor:pointer;}
+    #status{text-align:center; font-size:14px; color:#555; padding:5px 10px;}
+    .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; padding:18px; max-width:1400px; margin:0 auto 30px;}
+    .card{background:var(--card); border-radius:12px; box-shadow:0 3px 10px rgba(0,0,0,.06); overflow:hidden; border:1px solid #eee;}
+    .thumb{width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#000; cursor:pointer;}
+    .meta{padding:10px 12px; font-size:12px; color:#444; display:grid; gap:8px}
+    .kv{display:grid; grid-template-columns:140px 1fr; gap:6px 10px}
+    .kv .k{font-weight:700;color:#1f2937}
+    .kv .v{white-space:pre-wrap; word-wrap:anywhere}
+    .chips{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+    .chip{background:var(--chip); padding:3px 8px; border-radius:999px; font-size:11px; border:1px solid #dfe8ff;}
+    .chip.ok{border-color:#bfeee1; background:#f2fffb}
+    .chip.warn{border-color:#ffe3bf; background:#fff8ee}
+    .chip.bad{border-color:#ffd4d4; background:#fff3f3}
+    .btn-link{display:inline-block; padding:6px 10px; font-size:12px; border-radius:8px; border:1px solid #cbd5e1; text-decoration:none;}
     .btn-link:hover{background:#f1f5f9}
+    .url{color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 
-    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000;align-items:center;justify-content:center}
-    .modal-inner{display:flex;gap:18px;max-width:94vw;max-height:86vh;align-items:center}
-    .modal img{max-width:62vw;max-height:80vh;border-radius:10px;background:#000}
-    .side{background:#111;color:#e9e9e9;padding:12px 14px;border-radius:10px;max-width:28vw;overflow:auto;max-height:80vh;font-size:13px}
-    .side h4{margin:0 0 8px 0;font-size:14px;color:#fff}
-    .side .url{color:#bbb}
-    .close{position:absolute;top:16px;right:22px;font-size:2rem;color:#fff;cursor:pointer;user-select:none}
-    .nav{position:absolute;top:50%;transform:translateY(-50%);font-size:2.2rem;color:#fff;cursor:pointer;user-select:none;padding:8px 12px}
-    .prev{left:18px}.next{right:18px}
-    #login{text-align:center;margin-top:60px}
-    #login input{display:block;margin:8px auto;padding:8px;width:min(320px,90vw)}
-    #app{display:none}
-    .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 10px;margin:0}
-    .kv dt{color:#cfcfcf;font-weight:700;margin:0}
-    .kv dd{margin:0;color:#fff;white-space:pre-wrap;word-break:break-word}
-
-    .rating{display:grid;gap:8px;padding:8px;border:1px dashed #2d6cdf33;border-radius:10px}
+    /* rating */
+    .rating{display:grid; gap:8px; padding:8px; border:1px dashed #2d6cdf33; border-radius:10px}
     .rating .q{font-weight:700;font-size:12px}
-    .rating .opts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .rating .opts{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
     .rating .btn{background:#eef4ff;color:#1f2a44;border:1px solid #cbd5e1;border-radius:999px;padding:6px 10px;cursor:pointer;font-size:12px}
     .rating .btn.on{outline:2px solid #2d6cdf}
     .rating .saved{font-size:11px;color:#0a7}
+
+    /* modal */
+    .modal{display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; align-items:center; justify-content:center;}
+    .modal-inner{display:flex; gap:18px; max-width:94vw; max-height:86vh; align-items:center;}
+    .modal img{max-width:62vw; max-height:80vh; border-radius:10px; background:#000;}
+    .side{background:#111; color:#e9e9e9; padding:12px 14px; border-radius:10px; max-width:28vw; overflow:auto; max-height:80vh; font-size:13px;}
+    .side h4{margin:0 0 8px 0; font-size:14px; color:#fff}
+    .side .url{color:#bbb;}
+    .close{position:absolute; top:16px; right:22px; font-size:2rem; color:#fff; cursor:pointer; user-select:none;}
+    .nav{position:absolute; top:50%; transform:translateY(-50%); font-size:2.2rem; color:#fff; cursor:pointer; user-select:none; padding:8px 12px;}
+    .prev{left:18px;} .next{right:18px;}
+
+    /* login simplificado */
+    #login{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:8px}
   </style>
 </head>
 <body>
-  <!-- Login -->
+  <header>Visor de Imágenes WM (PostgreSQL)</header>
+
+  <!-- “Login” simple: solo define quién califica -->
   <div id="login">
-    <h2>Iniciar Sesión</h2>
-    <input type="email" id="user" placeholder="Correo (Firebase Auth)">
-    <input type="password" id="pass" placeholder="Contraseña">
-    <button onclick="autenticar()">Entrar</button>
+    <input id="user" placeholder="Tu correo o alias" />
+    <button id="btnSetUser">Usar usuario</button>
+    <span id="who"></span>
   </div>
 
-  <!-- App -->
-  <div id="app">
-    <header>Visor de Imágenes WM (RTDB)</header>
-    <div class="controls">
-      <input type="text" id="nicInput" placeholder="Ingrese NIC (Suscriptor)" />
-      <button id="btnBuscar">Buscar</button>
-      <button id="btnExport">Exportar actualizado (.xlsx)</button>
-      <button id="btnExportCSV">Exportar calificaciones (.csv)</button>
-      <button id="btnSalir">Salir</button>
-    </div>
-    <div id="status">Autenticado. Escriba el NIC y presione Buscar.</div>
+  <div class="controls">
+    <input type="text" id="nicInput" placeholder="Ingrese NIC (Suscriptor)" />
+    <button id="btnBuscar">Buscar</button>
+  </div>
+  <div id="status">Conectado al backend. Ingresa un NIC y pulsa Buscar.</div>
 
-    <div class="gallery" id="gallery"></div>
+  <div class="gallery" id="gallery"></div>
 
-    <!-- Modal -->
-    <div class="modal" id="modal">
-      <span class="close" id="btnCerrar" title="Cerrar">&times;</span>
-      <span class="nav prev" id="btnPrev" title="Anterior">&#10094;</span>
-      <div class="modal-inner">
-        <img id="modalImg" src="">
-        <div class="side" id="sideMeta">
-          <h4>Detalle</h4>
-          <dl class="kv" id="sideKv"></dl>
-
-          <div class="rating" id="modalRating" style="margin-top:8px;">
-            <div class="q">¿La foto te sirvió para tomar la decisión?</div>
-            <div class="opts">
-              <button class="btn" data-v="Sí">Sí</button>
-              <button class="btn" data-v="No">No</button>
-              <span class="saved" id="modalSaved" style="display:none">✔ guardado</span>
-            </div>
+  <!-- Modal -->
+  <div class="modal" id="modal">
+    <span class="close" id="btnCerrar" title="Cerrar">&times;</span>
+    <span class="nav prev" id="btnPrev" title="Anterior">&#10094;</span>
+    <div class="modal-inner">
+      <img id="modalImg" src="">
+      <div class="side" id="sideMeta">
+        <h4>Detalle</h4>
+        <div class="kv" id="sideKv"></div>
+        <div class="rating" id="modalRating" style="margin-top:8px;">
+          <div class="q">¿La foto te sirvió para tomar la decisión?</div>
+          <div class="opts">
+            <button class="btn" data-v="Sí">Sí</button>
+            <button class="btn" data-v="No">No</button>
+            <span class="saved" id="modalSaved" style="display:none">✔ guardado</span>
           </div>
-
-          <div class="actions" id="sideActions"></div>
-          <div class="url" id="sideUrl"></div>
         </div>
+        <div class="actions" id="sideActions"></div>
+        <div class="url" id="sideUrl"></div>
       </div>
-      <span class="nav next" id="btnNext" title="Siguiente">&#10095;</span>
     </div>
+    <span class="nav next" id="btnNext" title="Siguiente">&#10095;</span>
   </div>
 
 <script>
-  /*************** Firebase RTDB ***************/
+/* ================== Config API + sesión usuario ================== */
+const API_BASE = "http://localhost:3000"; // ajusta si tu backend usa otra URL/puerto
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAGIEGzyYHDjuj9FKJJSIIdwvLS3J88riU",
-  authDomain: "slpviwer.firebaseapp.com",
-  databaseURL: "https://slpviwer-default-rtdb.firebaseio.com",
-  projectId: "slpviwer",
-  storageBucket: "slpviwer.firebasestorage.app",
-  messagingSenderId: "610447764877",
-  appId: "1:610447764877:web:1ee6d0ca497260ed1fa1c4",
-  measurementId: "G-BFE1G7DCXD"
+let CURRENT_USER = localStorage.getItem('wm_user') || 'usuario-local';
+let CURRENT_UID  = CURRENT_USER;
+function setUser(u){
+  CURRENT_USER = (u||'usuario-local').trim();
+  CURRENT_UID  = CURRENT_USER; // usamos el alias como user_id
+  localStorage.setItem('wm_user', CURRENT_USER);
+  document.getElementById('who').textContent = `Usando: ${CURRENT_USER}`;
+}
+document.getElementById('btnSetUser').onclick = ()=>{
+  const u = document.getElementById('user').value || CURRENT_USER;
+  setUser(u);
 };
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const rtdb = firebase.database();
+setUser(CURRENT_USER);
 
-  /*************** Auth ***************/
-  let CURRENT_USER = null;
-  let CURRENT_UID  = null;
-
-  function autenticar(){
-    const email = document.getElementById("user").value.trim();
-    const pass  = document.getElementById("pass").value;
-    if(!email || !pass){ alert("Ingrese correo y contraseña"); return; }
-    auth.signInWithEmailAndPassword(email, pass)
-      .then(cred=>{
-        CURRENT_USER = cred.user.email || "usuario";
-        CURRENT_UID  = cred.user.uid;
-        document.getElementById("login").style.display="none";
-        document.getElementById("app").style.display="block";
-        statusMsg(`Sesión iniciada como ${CURRENT_USER}.`);
-      })
-      .catch(err=>alert("No se pudo iniciar sesión: "+err.message));
-  }
-  document.getElementById("btnSalir").addEventListener("click", ()=>{
-    auth.signOut().then(()=>{
-      CURRENT_USER=null; CURRENT_UID=null;
-      document.getElementById("app").style.display="none";
-      document.getElementById("login").style.display="block";
-    });
-  });
-
-  /*************** Utils ***************/
-  const $=id=>document.getElementById(id);
-  const statusMsg=t=>$("status").textContent=t;
-  const pad2=n=>String(n).padStart(2,'0');
-
-  // fechaGestion en RTDB: usamos milisegundos (Number) o ISO string
-  function formatFecha(val){
-    if(val==null || val==="") return "";
-    if(typeof val==="number"){ const d=new Date(val);
-      return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-    }
-    const d=new Date(String(val));
+/* ================== Helpers ================== */
+const $=id=>document.getElementById(id);
+const statusMsg=t=>$('status').textContent=t;
+const pad2=n=>String(n).padStart(2,'0');
+function escapeHtml(v){return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
+function formatFechaSmart(val){
+  if(val==null||val==='') return '';
+  // si viene en ms epoch
+  if(/^\d{12,}$/.test(String(val))) {
+    const d=new Date(Number(val));
     if(!isNaN(d)) return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-    return String(val);
   }
-  function escapeHtml(v){return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));}
-  const safe=v=>v==null?"":v;
+  // si viene como texto tipo DD/MM/YYYY HH:MM:SS AM/PM o similar: mostramos tal cual
+  return String(val);
+}
 
-  /*************** Consulta por NIC (RTDB) ***************/
-  let MATCHES=[], CURRENT_NIC="";
-
-  document.getElementById('btnBuscar').addEventListener('click', async ()=>{
-    const q = $('nicInput').value.trim();
-    if(!q){ statusMsg('Escribe un NIC para buscar.'); return; }
-    if(!auth.currentUser){ alert('Primero inicia sesión.'); return; }
-
-    statusMsg(`Buscando NIC ${q} en RTDB...`);
-    try{
-      const ref = rtdb.ref('photos').orderByChild('nic').equalTo(q);
-      const snap = await ref.get();
-      const rows=[];
-      if(snap.exists()){
-        snap.forEach(child=>{
-          rows.push({ id: child.key, ...child.val() });
-        });
-      }
-      MATCHES = rows;
-      CURRENT_NIC = q;
-
-      if(!rows.length){
-        statusMsg(`No hay resultados para NIC: ${q}`);
-        $('gallery').innerHTML = '<div class="empty">Sin resultados.</div>';
-      }else{
-        statusMsg(`Encontradas ${rows.length} filas para NIC ${q}.`);
-        renderGallery(rows);
-      }
-    }catch(e){
-      console.error(e);
-      statusMsg('Error consultando RTDB.');
-    }
+/* ================== API calls ================== */
+async function fetchPhotosByNic(nic){
+  const r = await fetch(`${API_BASE}/photos?nic=${encodeURIComponent(nic)}`);
+  if(!r.ok) throw new Error('Error HTTP '+r.status);
+  return await r.json(); // array de filas
+}
+async function getMyRating(nic){
+  const r = await fetch(`${API_BASE}/ratings/${encodeURIComponent(nic)}/${encodeURIComponent(CURRENT_UID)}`);
+  if(r.status===204) return null;
+  if(!r.ok) throw new Error('Error rating HTTP '+r.status);
+  const data = await r.json();
+  return data?.value || null;
+}
+async function saveRating(nic, value){
+  const r = await fetch(`${API_BASE}/ratings/${encodeURIComponent(nic)}/${encodeURIComponent(CURRENT_UID)}`,{
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ value, user: CURRENT_USER })
   });
+  if(!r.ok) throw new Error('No se pudo guardar rating');
+  return true;
+}
 
-  /*************** Render ***************/
-  function infoRows(row){
-    return [
-      ["NIC", safe(row.nic)],
-      ["Dirección", safe(row.direccion)],
-      ["Fecha de Gestión", formatFecha(row.fechaGestion)],
-      ["# Medidor", safe(row.medidor)],
-      ["Lectura", safe(row.lectura)],
-      ["Lectura Anterior", safe(row.lecturaAnterior)],
-      ["Tipo Magnitud", safe(row.tipoMagnitud)],
-      ["Anomalía", safe(row.anomalia)]
-    ];
+/* ================== UI principal ================== */
+let MATCHES=[], modalIdx=0, CURRENT_NIC='';
+
+$('btnBuscar').onclick = async ()=>{
+  const q = $('nicInput').value.trim();
+  if(!q){ statusMsg('Escribe un NIC para buscar.'); return; }
+  try{
+    statusMsg(`Buscando NIC ${q}...`);
+    const rows = await fetchPhotosByNic(q);
+    MATCHES = rows || [];
+    CURRENT_NIC = q;
+    if(!MATCHES.length){
+      statusMsg(`No hay resultados para NIC: ${q}`);
+      $('gallery').innerHTML = '<div class="empty" style="padding:12px;text-align:center;color:#666;">Sin resultados.</div>';
+    }else{
+      statusMsg(`Encontradas ${MATCHES.length} filas para NIC ${q}.`);
+      await renderGallery(MATCHES);
+    }
+  }catch(e){
+    console.error(e);
+    statusMsg('Error consultando la API. Revisa que el backend esté activo y CORS habilitado.');
   }
+};
 
-  function buildMapButton(row){
-    const lat = String(row.lat ?? "").replace(",",".");
-    const lon = String(row.lon ?? "").replace(",",".");
-    const la = parseFloat(lat), lo = parseFloat(lon);
-    if(!isFinite(la) || !isFinite(lo)) return "";
-    const href = `https://www.google.com/maps?q=${la},${lo}`;
-    return `<a class="btn-link" href="${href}" target="_blank" rel="noopener">Ver en Google Maps</a>`;
-  }
+function infoPairs(row){
+  // Mapea TODOS tus campos conocidos. Añade o quita según tu tabla.
+  return [
+    ["NIC", row.nic||""],
+    ["Dirección", row.direccion||""],
+    ["Fecha de Gestión", formatFechaSmart(row.fecha_gestion)],
+    ["# Medidor", row.medidor||""],
+    ["Lectura", row.lectura||""],
+    ["Lectura Anterior", row.lectura_anterior||""],
+    ["Tipo Magnitud", row.tipo_magnitud||""],
+    ["Anomalía", row.anomalia||""],
+    ["Ruta", row.ruta||""],
+    ["Orden", row.orden||""],
+    ["Secuencia", row.secuencia||""],
+    ["Suscriptor", row.suscriptor||""],
+    ["Estado", row.estado||""],
+    ["Rescatable", row.rescatable||""],
+    ["Tipo Medida", row.tipo_medida||""],
+    ["Latitud", row.latitud||""],
+    ["Longitud", row.longitud||""],
+    ["Ciclo", row.ciclo||""],
+    ["Periodo", row.periodo||""],
+    ["Nombre Suscriptor", row.nombre_suscriptor||""],
+    ["Fecha Cargue", row.fecha_cargue||""],
+    ["Asignado por", row.asignado_por||""],
+    ["Asignado a", row.asignado_a||""],
+    ["Gestionada por", row.gestionada_por||""],
+    ["Fecha Asignación", row.fecha_asignacion||""],
+    ["Fecha Vencimiento", row.fecha_vencimiento||""],
+    ["Contratista", row.contratista||""],
+    ["Barrio", row.barrio||""],
+    ["Municipio", row.municipio||""],
+    ["Cod. Tipo Magnitud", row.cod_tipo_magnitud||""],
+    ["Cod. Crítica", row.cod_critica||""],
+    ["Consumo Promedio", row.consumo_promedio||""],
+    ["Observación Padre", row.observacion_padre||""],
+    ["Observación", row.observacion||""],
+    ["Observación extra", row.observacion_extra||""],
+    ["Solución Crítica", row.solucion_critica||""],
+    ["Resultado Crítica", row.resultado_critica||""],
+    ["Nota último intento", row.nota_ultimo_intento||""]
+  ];
+}
+function buildMapButton(row){
+  const la = parseFloat(String(row.latitud||'').replace(',','.'));
+  const lo = parseFloat(String(row.longitud||'').replace(',','.'));
+  if(!isFinite(la)||!isFinite(lo)) return '';
+  return `<a class="btn-link" href="https://www.google.com/maps?q=${la},${lo}" target="_blank" rel="noopener">Ver en Google Maps</a>`;
+}
 
-  async function getMyRating(photoId){
-    if(!CURRENT_UID) return null;
-    const snap = await rtdb.ref(`ratings/${photoId}/${CURRENT_UID}/value`).get();
-    return snap.exists() ? snap.val() : null;
-  }
+async function renderGallery(rows){
+  // precarga rating por NIC (mismo valor para todas las filas del mismo NIC)
+  const rating = rows.length ? await getMyRating(rows[0].nic) : null;
 
-  function ratingBlockHTML(photoId, selected){
+  const g = $('gallery');
+  g.innerHTML = rows.map((row, idx) => {
+    const kv = infoPairs(row).map(([k,v])=> `<span class="k">${escapeHtml(k)}:</span><span class="v">${escapeHtml(v)}</span>`).join('');
+    const url = row.evidencia || row.url || '';
+    const anom = (row.anomalia||'').toLowerCase();
+    let chipCls='chip'; if(/ok|normal|ninguna/.test(anom)) chipCls+=' ok'; else if(/advert|leve|warn/.test(anom)) chipCls+=' warn'; else if(anom) chipCls+=' bad';
+
     return `
-      <div class="rating" data-photo="${escapeHtml(photoId)}">
-        <div class="q">¿La foto te sirvió para tomar la decisión?</div>
-        <div class="opts">
-          <button class="btn rate ${selected==='Sí'?'on':''}" data-v="Sí">Sí</button>
-          <button class="btn rate ${selected==='No'?'on':''}" data-v="No">No</button>
-          <span class="saved" style="display:${selected?'inline':'none'}">✔ guardado</span>
+      <div class="card">
+        <img class="thumb" data-idx="${idx}" src="${escapeHtml(url)}" alt="img"/>
+        <div class="meta">
+          <div class="kv">${kv}</div>
+          <div class="chips">${anom?`<span class="${chipCls}">Anomalía: ${escapeHtml(row.anomalia)}</span>`:''} ${buildMapButton(row)}</div>
+          <div class="rating" data-nic="${escapeHtml(row.nic||'')}">
+            <div class="q">¿La foto te sirvió para tomar la decisión?</div>
+            <div class="opts">
+              <button class="btn rate ${rating==='Sí'?'on':''}" data-v="Sí">Sí</button>
+              <button class="btn rate ${rating==='No'?'on':''}" data-v="No">No</button>
+              <span class="saved" style="display:${rating?'inline':'none'}">✔ guardado</span>
+            </div>
+          </div>
+          <div class="url" title="${escapeHtml(url)}">${escapeHtml(url)}</div>
         </div>
       </div>`;
-  }
+  }).join('');
 
-  async function renderGallery(rows){
-    const ratings = {};
-    await Promise.all(rows.map(async r=>{ ratings[r.id] = await getMyRating(r.id); }));
-
-    const g = $('gallery');
-    g.innerHTML = rows.map((row, idx) => {
-      const url = row.url || '';
-      const kvHtml = infoRows(row).map(([k,v]) =>
-        `<span class="label">${escapeHtml(k)}:</span><span class="value">${escapeHtml(v)}</span>`
-      ).join('');
-      const mapBtn = buildMapButton(row);
-      const rating = ratings[row.id] || null;
-
-      return `
-        <div class="card" data-photo="${escapeHtml(row.id)}">
-          <img class="thumb" data-idx="${idx}" src="${url}" alt="img"/>
-          <div class="meta">
-            <div class="kv-card">${kvHtml}</div>
-            ${ratingBlockHTML(row.id, rating)}
-            <div class="actions">${mapBtn}</div>
-            <div class="url" title="${url}">${url}</div>
-          </div>
-        </div>`;
-    }).join('');
-
-    g.querySelectorAll('.thumb').forEach(img => {
-      img.addEventListener('click', ev => openModal(Number(ev.currentTarget.dataset.idx)));
-    });
-    attachRatingHandlers(g);
-  }
-
-  function attachRatingHandlers(rootEl){
-    rootEl.querySelectorAll('.rating .rate').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const container = e.currentTarget.closest('.rating');
-        const photoId = container.dataset.photo;
-        const val = e.currentTarget.dataset.v;
-        await saveRating(photoId, val);
-        container.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
-        e.currentTarget.classList.add('on');
-        const saved = container.querySelector('.saved');
-        if(saved){ saved.style.display = 'inline'; }
-      });
-    });
-  }
-
-  /*************** Modal ***************/
-  let modalIdx = 0;
-  async function openModal(i){
-    modalIdx = i;
-    const row = MATCHES[i]; if(!row) return;
-    $('modalImg').src = row.url || '';
-    $('sideKv').innerHTML = infoRows(row).map(([k,v]) =>
-      `<dt>${escapeHtml(k)}:</dt><dd>${escapeHtml(v)}</dd>`
-    ).join('');
-    $('sideActions').innerHTML = buildMapButton(row);
-    $('sideUrl').textContent = row.url || '';
-    $('sideUrl').title = row.url || '';
-
-    const ratingVal = await getMyRating(row.id);
-    const modalRating = $('modalRating');
-    modalRating.setAttribute('data-photo', row.id);
-    modalRating.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
-    $('modalSaved').style.display = ratingVal ? 'inline' : 'none';
-    if(ratingVal) modalRating.querySelector(`.rate[data-v="${ratingVal}"]`)?.classList.add('on');
-
-    $('modal').style.display = 'flex';
-  }
-  $('btnCerrar').onclick = () => $('modal').style.display = 'none';
-  $('btnPrev').onclick = () => { if (modalIdx>0) openModal(modalIdx-1); };
-  $('btnNext').onclick = () => { if (modalIdx<MATCHES.length-1) openModal(modalIdx+1); };
-  window.addEventListener('keydown', e => { if (e.key==='Escape') $('modal').style.display='none'; });
-
-  document.querySelectorAll('#modalRating .rate').forEach(btn=>{
+  // handlers
+  g.querySelectorAll('.thumb').forEach(img=>{
+    img.addEventListener('click', ev => openModal(Number(ev.currentTarget.dataset.idx)));
+  });
+  g.querySelectorAll('.rating .rate').forEach(btn=>{
     btn.addEventListener('click', async e=>{
-      const container = e.currentTarget.closest('#modalRating');
-      const photoId = container.getAttribute('data-photo');
+      const box = e.currentTarget.closest('.rating');
+      const nic = box.dataset.nic;
       const val = e.currentTarget.dataset.v;
-      await saveRating(photoId, val);
-      container.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
-      e.currentTarget.classList.add('on');
-      $('modalSaved').style.display='inline';
-      if(MATCHES?.length) renderGallery(MATCHES);
+      try{
+        await saveRating(nic, val);
+        box.querySelectorAll('.rate').forEach(x=>x.classList.remove('on'));
+        e.currentTarget.classList.add('on');
+        box.querySelector('.saved').style.display='inline';
+      }catch(err){ alert('No se pudo guardar la calificación'); }
     });
   });
+}
 
-  /*************** Guardar calificación (RTDB) ***************/
-  async function saveRating(photoId, value){
-    if(!CURRENT_UID){ alert("Primero inicia sesión."); return; }
-    const ref = rtdb.ref(`ratings/${photoId}/${CURRENT_UID}`);
-    const nowMs = Date.now();
-    await ref.update({
-      value,                      // "Sí" o "No"
-      user: CURRENT_USER || "",
-      ts: nowMs                   // guardamos en ms
-    });
-  }
+/* ================== Modal ================== */
+function openModal(i){
+  modalIdx=i;
+  const row = MATCHES[i]; if(!row) return;
+  const url = row.evidencia || row.url || '';
+  $('modalImg').src = url;
+  $('sideKv').innerHTML = infoPairs(row).map(([k,v]) => `<div class="k">${escapeHtml(k)}:</div><div class="v">${escapeHtml(v)}</div>`).join('');
+  $('sideActions').innerHTML = buildMapButton(row);
+  $('sideUrl').textContent = url;
+  $('sideUrl').title = url;
+  applyModalRating(row.nic);
+  $('modal').style.display = 'flex';
+}
+$('btnCerrar').onclick = () => $('modal').style.display = 'none';
+$('btnPrev').onclick = () => { if (modalIdx>0) openModal(modalIdx-1); };
+$('btnNext').onclick = () => { if (modalIdx<MATCHES.length-1) openModal(modalIdx+1); };
+window.addEventListener('keydown', e => { if (e.key==='Escape') $('modal').style.display='none'; });
 
-  /*************** Exportar XLSX y CSV ***************/
-  document.getElementById('btnExport').addEventListener('click', async ()=>{
-    if(!MATCHES.length){ alert('Primero haga una búsqueda.'); return; }
-
-    // leer ratings del usuario actual para estas fotos
-    const rows = [];
-    for(const p of MATCHES){
-      const snap = await rtdb.ref(`ratings/${p.id}/${CURRENT_UID}`).get();
-      const rt = snap.exists()? snap.val() : null;
-      const d = rt?.ts ? new Date(rt.ts) : null;
-      rows.push({
-        NIC: p.nic || "",
-        URL: p.url || "",
-        "Dirección": p.direccion || "",
-        "Fecha de Gestión": formatFecha(p.fechaGestion),
-        "# Medidor": p.medidor || "",
-        "Lectura": p.lectura || "",
-        "Lectura Anterior": p.lecturaAnterior || "",
-        "Tipo Magnitud": p.tipoMagnitud || "",
-        "Anomalía": p.anomalia || "",
-        Lat: p.lat || "",
-        Lon: p.lon || "",
-        Pregunta: "¿La foto te sirvió para tomar la decisión?",
-        "Calificación": rt?.value || "",
-        "Calificado por": rt?.user || (CURRENT_USER||""),
-        "Fecha Calificación": d ? `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}` : ""
-      });
-    }
-    const ws = XLSX.utils.json_to_sheet(rows, {cellDates:false});
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `NIC_${CURRENT_NIC||''}`);
-    XLSX.writeFile(wb, `datos_actualizados_${CURRENT_NIC||'consulta'}.xlsx`);
+document.querySelectorAll('#modalRating .btn').forEach(b=>{
+  b.addEventListener('click', async e=>{
+    const row = MATCHES[modalIdx]; if(!row) return;
+    const val = e.currentTarget.dataset.v;
+    await saveRating(row.nic, val);
+    await applyModalRating(row.nic);
+    renderGallery(MATCHES);
   });
-
-  document.getElementById('btnExportCSV').addEventListener('click', async ()=>{
-    if(!MATCHES.length){ alert('Primero haga una búsqueda.'); return; }
-    const out=[];
-    for(const p of MATCHES){
-      const snap = await rtdb.ref(`ratings/${p.id}/${CURRENT_UID}`).get();
-      if(snap.exists()){
-        const rt=snap.val(); const d=rt.ts?new Date(rt.ts):null;
-        out.push({
-          NIC:p.nic||"", URL:p.url||"",
-          Pregunta:"¿La foto te sirvió para tomar la decisión?",
-          Calificacion: rt.value||"",
-          "Calificado por": rt.user || (CURRENT_USER||""),
-          "Fecha Calificacion": d?`${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}`:""
-        });
-      }
-    }
-    if(!out.length){ alert('Aún no hay calificaciones para exportar.'); return; }
-    const headers=["NIC","URL","Pregunta","Calificacion","Calificado por","Fecha Calificacion"];
-    const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-    const csv=[headers.join(","), ...out.map(r=>headers.map(h=>esc(r[h])).join(","))].join("\r\n");
-    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download=`calificaciones_${CURRENT_NIC||'consulta'}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  });
+});
+async function applyModalRating(nic){
+  const v = await getMyRating(nic);
+  document.querySelectorAll('#modalRating .btn').forEach(x=>x.classList.remove('on'));
+  if(v) document.querySelector(`#modalRating .btn[data-v="${v}"]`)?.classList.add('on');
+  $('modalSaved').style.display = v ? 'inline' : 'none';
+}
 </script>
 </body>
 </html>
