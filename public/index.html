@@ -222,13 +222,9 @@
           <div class="auth-form">
             <input type="email" id="email" placeholder="Email" />
             <input type="password" id="pwd" placeholder="Contraseña" />
-            <div class="row">
+            <div class="row" style="display:flex;gap:10px">
               <button id="btnLogin" class="btn" style="flex:1">Login</button>
-              <button id="btnReg" class="btn secondary" style="flex:1">Registrar</button>
-            </div>
-            <div class="row" style="justify-content:space-between; align-items:center">
-              <div class="helper">Primero inicia sesión para usar el visor.</div>
-              <button id="btnThemeAuth" class="toggle" title="Cambiar tema">
+              <button id="btnThemeAuth" class="toggle" title="Cambiar tema" style="flex:0 0 auto">
                 <svg id="iconThemeAuth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="4"></circle>
                   <path d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.5-7.5-1.5 1.5M8 18l-1.5 1.5m12 0L18 18M6.5 6.5 8 8"></path>
@@ -236,6 +232,7 @@
                 <span id="labelThemeAuth">Tema</span>
               </button>
             </div>
+            <div class="helper">Primero inicia sesión para usar el visor.</div>
           </div>
         </div>
         <div class="status" id="status">—</div>
@@ -379,6 +376,8 @@ let CURRENT_USER = localStorage.getItem('wm_user') || '';
 let CURRENT_UID  = CURRENT_USER;
 
 // Limpia todo el estado/DOM al salir
+let MATCHES = [];
+let modalIdx = 0;
 function resetUIOnLogout(){
   MATCHES = [];
   modalIdx = 0;
@@ -420,16 +419,19 @@ function setSession(token, email){
 // Estado inicial
 setSession(AUTH_TOKEN, CURRENT_USER);
 
-/* ================== Auth API ================== */
+/* ================== Auth API (solo login) ================== */
 async function authLogin(email, password){
-  const r = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
-  if(!r.ok) throw new Error((await safeJson(r))?.error || 'Login inválido');
-  const j = await r.json(); setSession(j.token, j.user.email);
-}
-async function authRegister(email, password){
-  const r = await fetch(`${API_BASE}/auth/register`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
-  if(!r.ok) throw new Error((await safeJson(r))?.error || 'Registro falló');
-  const j = await r.json(); setSession(j.token, j.user.email);
+  const r = await fetch(`${API_BASE}/auth/login`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ email, password })
+  });
+  if(!r.ok){
+    let msg='Login inválido';
+    try{ msg=(await r.json())?.error||msg; }catch{}
+    throw new Error(msg);
+  }
+  const j = await r.json();
+  setSession(j.token, j.user.email);
 }
 async function safeJson(resp){ try{ return await resp.json(); }catch{ return null; } }
 
@@ -462,10 +464,7 @@ async function getMyRatingByPhoto(photoId){
   return (await r.json())?.value || null;
 }
 
-/* ================== UI: Visor ================== */
-let MATCHES = [];
-let modalIdx = 0;
-
+/* ================== UI: Eventos base ================== */
 document.addEventListener('DOMContentLoaded', () => {
   $('email')?.addEventListener('keydown', e => { if (e.key==='Enter') $('btnLogin').click(); });
   $('pwd')?.addEventListener('keydown',   e => { if (e.key==='Enter') $('btnLogin').click(); });
@@ -474,18 +473,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btnThemeAuth')?.addEventListener('click', toggleTheme);
 });
 
-/* Auth handlers */
+/* Login / Logout */
 $('btnLogin').onclick = async ()=>{
   const email = $('email').value.trim();
   const pwd   = $('pwd').value;
   if(!email || !pwd) return alert('Email y contraseña requeridos');
   try{ await authLogin(email, pwd); } catch(e){ statusAuth(e.message); alert(e.message); }
-};
-$('btnReg').onclick = async ()=>{
-  const email = $('email').value.trim();
-  const pwd   = $('pwd').value;
-  if(!email || !pwd) return alert('Email y contraseña requeridos');
-  try{ await authRegister(email, pwd); } catch(e){ statusAuth(e.message); alert(e.message); }
 };
 $('btnLogout').onclick = ()=> setSession(null, null);
 
@@ -518,7 +511,7 @@ $('btnBuscar').onclick = async ()=>{
   }
 };
 
-/* Atributos visibles */
+/* ======== Campos visibles por tarjeta ======== */
 function rowInfoPairs(row){
   return [
     ["NIC", row.nic || ""],
@@ -538,7 +531,7 @@ function rowInfoPairs(row){
   ];
 }
 
-/* ID estable */
+/* ======== ID estable ======== */
 function computePhotoId(row){
   if (row.id) return String(row.id);
   if (row.photo_id) return String(row.photo_id);
@@ -550,10 +543,8 @@ function computePhotoId(row){
   return `${nic}|${med}|${fecha}`;
 }
 
-/* Icono Maps (SVG) */
+/* ======== Icono y botón Google Maps ======== */
 const ICON_MAP = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0"/><path d="M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7z"/></svg>';
-
-/* Botón Google Maps */
 function buildMapButton(row){
   const la = parseFloat(String(row.latitud||'').replace(',','.'));
   const lo = parseFloat(String(row.longitud||'').replace(',','.'));
@@ -561,7 +552,7 @@ function buildMapButton(row){
   return `<a class="btn-link" href="https://www.google.com/maps?q=${la},${lo}" target="_blank" rel="noopener">${ICON_MAP}<span>Google Maps</span></a>`;
 }
 
-/* Render galería */
+/* ======== Render galería ======== */
 async function renderGallery(rows){
   // Mantener orden por más recientes ante re-renders
   rows.sort((a,b) => getRowDateMs(b) - getRowDateMs(a));
@@ -597,7 +588,7 @@ async function renderGallery(rows){
       </div>`;
   }).join('');
 
-  // Eventos
+  // Abrir modal al click en la imagen
   document.querySelectorAll('.thumb').forEach(img=>{
     img.addEventListener('click', ev => openModal(Number(ev.currentTarget.dataset.idx)));
   });
@@ -624,7 +615,7 @@ async function renderGallery(rows){
   });
 }
 
-/* Modal */
+/* ======== Modal ======== */
 function openModal(i){
   modalIdx=i;
   const row = MATCHES[i]; if(!row) return;
