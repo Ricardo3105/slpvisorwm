@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <title>Visor de Imágenes WM (SLP)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Inter (fallback a system) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ===== THEME TOKENS ===== */
+    :root{
+      --bg:#0b0b0f;
+      --surface:#0f1115;
+      --ink:#e5e7eb;
+      --muted:#9aa4b2;
+      --accent:#7c3aed;
+      --accent2:#06b6d4;
+      --ring:rgba(124,58,237,.45);
+      --border:rgba(255,255,255,.08);
+      --border-strong:rgba(255,255,255,.12);
+      --ok:#10b981; --bad:#ef4444;
+      --thumb-bg:#000;
+      --chip-bg:rgba(255,255,255,.05);
+      --card-grad1:rgba(255,255,255,.03);
+      --card-grad2:rgba(255,255,255,.02);
+      --focus-ring:rgba(124,58,237,.12);
+      --shadow:rgba(0,0,0,.45);
+      --scroll-track:#0b0d12;
+      --scroll-thumb:#1f2430;
+      --scroll-thumb-hover:#2a3242;
+    }
+    html[data-theme="light"]{
+      --bg:#f8fafc;
+      --surface:#ffffff;
+      --ink:#0b1221;
+      --muted:#5b677a;
+      --accent:#6d28d9;
+      --accent2:#0891b2;
+      --ring:rgba(109,40,217,.45);
+      --border:rgba(2,6,23,.08);
+      --border-strong:rgba(2,6,23,.12);
+      --ok:#059669; --bad:#dc2626;
+      --thumb-bg:#0b0b0f;
+      --chip-bg:rgba(2,6,23,.03);
+      --card-grad1:rgba(2,6,23,.02);
+      --card-grad2:rgba(2,6,23,.01);
+      --focus-ring:rgba(109,40,217,.14);
+      --shadow:rgba(2,6,23,.08);
+      --scroll-track:#eef2f7;
+      --scroll-thumb:#cfd6e3;
+      --scroll-thumb-hover:#bdc8da;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      color:var(--ink);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, color-mix(in oklab, var(--accent) 30%, transparent), transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, color-mix(in oklab, var(--accent2) 25%, transparent), transparent 60%),
+        var(--bg);
+      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+      letter-spacing:.1px;
+      transition: background .25s ease, color .25s ease;
+    }
+
+    header{
+      position:sticky; top:0; z-index:5;
+      backdrop-filter: saturate(180%) blur(10px);
+      background:linear-gradient(180deg, color-mix(in oklab, var(--bg) 75%, transparent), color-mix(in oklab, var(--bg) 35%, transparent) 80%, transparent);
+      border-bottom:1px solid var(--border);
+    }
+    .container{max-width:1200px; margin:0 auto; padding:22px 18px;}
+    .title{
+      text-align:center; font-weight:800; letter-spacing:.2px;
+      font-size: clamp(22px, 3vw, 28px);
+      background:linear-gradient(90deg, color-mix(in oklab, var(--ink) 95%, #fff), #c7d2fe 40%, #a78bfa 65%, #67e8f9 90%);
+      -webkit-background-clip:text; background-clip:text; color:transparent;
+      margin:0;
+    }
+
+    /* ===== Cards ===== */
+    .cards-grid{display:grid; gap:18px; grid-template-columns:1fr;}
+    .card{
+      background: linear-gradient(180deg, var(--card-grad1), var(--card-grad2));
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow: 0 10px 30px var(--shadow), inset 0 1px 0 color-mix(in oklab, var(--ink) 3%, transparent);
+      transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .card.pad{padding:16px}
+    .card:hover{border-color:var(--border-strong)}
+    .card .headline{font-weight:600; font-size:14px; color:var(--muted); margin-bottom:10px; letter-spacing:.2px}
+
+    /* ===== Auth ===== */
+    .auth-wrap{max-width:520px; margin:36px auto}
+    .auth-form{display:grid; gap:12px}
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    input,button{
+      font-size:14px; border-radius:12px; outline:none;
+      transition: border-color .15s ease, box-shadow .15s ease, background .2s ease, color .2s ease;
+    }
+    input{
+      background: color-mix(in oklab, var(--surface) 96%, var(--bg));
+      color:var(--ink);
+      border:1px solid var(--border); padding:12px 14px; width:100%;
+    }
+    input:focus{border-color:var(--ring); box-shadow:0 0 0 4px var(--focus-ring)}
+    .btn{
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 28%, transparent), color-mix(in oklab, var(--accent) 12%, transparent));
+      color:#fff; padding:12px 14px; cursor:pointer;
+      transition:.18s ease transform, .18s ease box-shadow, .18s ease border-color;
+    }
+    html[data-theme="light"] .btn{color:var(--ink)}
+    .btn:hover{transform:translateY(-1px); box-shadow:0 8px 24px color-mix(in oklab, var(--accent) 25%, transparent); border-color:var(--ring)}
+    .btn.secondary{
+      background:linear-gradient(180deg, var(--chip-bg), color-mix(in oklab, var(--chip-bg) 65%, transparent));
+      color:var(--ink);
+    }
+    .helper{font-size:12px; color:var(--muted); text-align:center; margin-top:8px}
+
+    /* ===== Toolbar/Search ===== */
+    .toolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap}
+    .who{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px;
+      background:var(--chip-bg); border:1px solid var(--border); color:color-mix(in oklab, var(--ink) 75%, #cbd5e1); font-size:12px}
+    .logout{padding:10px 12px}
+    .searchbar{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap}
+    .searchbar input{min-width:260px}
+
+    /* ===== Theme toggle ===== */
+    .toggle{
+      display:inline-flex; align-items:center; gap:10px; padding:8px 10px; border-radius:12px;
+      background:var(--chip-bg); border:1px solid var(--border); color:var(--ink); cursor:pointer; user-select:none;
+    }
+    .toggle svg{width:18px; height:18px}
+
+    /* ===== Gallery ===== */
+    .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px}
+    .p-meta{padding:12px 14px}
+    .thumb{
+      width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:var(--thumb-bg);
+      border-top-left-radius:16px; border-top-right-radius:16px;
+      border-bottom:1px solid var(--border);
+    }
+    .kv{
+      display:grid; grid-template-columns:140px 1fr; gap:6px 10px; font-size:12px; color:color-mix(in oklab, var(--ink) 85%, #cbd5e1);
+    }
+    .kv .k{color:var(--muted)}
+    .kv .v{white-space:pre-wrap; word-wrap:anywhere; color:var(--ink)}
+    .actions{margin-top:8px; display:flex; gap:10px; flex-wrap:wrap}
+    .btn-link{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 10px; font-size:12px; border-radius:10px;
+      background:var(--chip-bg); border:1px solid var(--border); color:color-mix(in oklab, var(--ink) 85%, #d1d5db); text-decoration:none
+    }
+    .btn-link:hover{border-color:var(--ring); box-shadow:0 0 0 4px var(--focus-ring)}
+    .rating{
+      margin-top:8px; padding:10px; border-radius:12px;
+      border:1px dashed color-mix(in oklab, var(--accent) 55%, transparent); background:color-mix(in oklab, var(--accent) 12%, transparent);
+    }
+    .rating .q{font-size:12px; color:color-mix(in oklab, var(--ink) 85%, #cbd5e1); margin-bottom:6px}
+    .rating .opts{display:flex; gap:8px; flex-wrap:wrap}
+    .chip{
+      padding:6px 12px; font-size:12px; border-radius:999px;
+      border:1px solid var(--border); background:var(--chip-bg); color:var(--ink); cursor:pointer;
+      transition:.15s ease border-color, .15s ease background;
+    }
+    .chip.on{background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 35%, transparent), color-mix(in oklab, var(--accent) 18%, transparent)); border-color:var(--ring); color:#fff}
+    html[data-theme="light"] .chip.on{color:var(--ink)}
+    .saved{font-size:11px; color:var(--ok)}
+
+    .status{font-size:13px; color:var(--muted); text-align:center; padding:6px}
+
+    /* ===== Modal ===== */
+    .modal{display:none; position:fixed; inset:0; z-index:1000;
+      background:color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter:blur(6px);
+      align-items:center; justify-content:center}
+    .modal-inner{display:flex; gap:18px; max-width:94vw; max-height:86vh; align-items:center}
+    .modal img{max-width:62vw; max-height:80vh; border-radius:14px; background:var(--thumb-bg); border:1px solid var(--border)}
+    .side{background: linear-gradient(180deg, var(--card-grad1), var(--card-grad2));
+      color:var(--ink); padding:14px; border-radius:14px; max-width:28vw; overflow:auto; max-height:80vh; font-size:13px; border:1px solid var(--border)}
+    .side h4{margin:0 0 8px; font-size:13px; color:var(--muted)}
+    .side .url{color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .side .actions{margin-top:8px; display:flex; gap:8px; flex-wrap:wrap}
+    .close,.nav{position:absolute; color:var(--ink); cursor:pointer; user-select:none}
+    .close{top:18px; right:24px; font-size:32px}
+    .nav{top:50%; transform:translateY(-50%); font-size:34px; padding:8px 12px}
+    .prev{left:18px} .next{right:18px}
+    .rating-modal .btn{padding:6px 12px; border-radius:999px; border:1px solid var(--border);
+      background:var(--chip-bg); color:var(--ink); cursor:pointer}
+    .rating-modal .btn.on{background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 35%, transparent), color-mix(in oklab, var(--accent) 18%, transparent)); border-color:var(--ring)}
+    .rating-modal .saved{color:var(--ok); font-size:11px}
+
+    /* Scrollbar */
+    ::-webkit-scrollbar{height:10px;width:10px}
+    ::-webkit-scrollbar-track{background:var(--scroll-track)}
+    ::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border-radius:10px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--scroll-thumb-hover)}
+
+    /* Responsive */
+    @media (max-width: 900px){ .kv{grid-template-columns:120px 1fr} .modal-inner{flex-direction:column} .side{max-width:92vw; width:92vw} .modal img{max-width:92vw} }
+    @media (max-width: 480px){ .kv{grid-template-columns:1fr} .kv .k{color:var(--muted)} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1 class="title">Visor de Imágenes WM (SLP)</h1>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- ======== LOGIN ======== -->
+    <section id="view-auth" class="view">
+      <div class="auth-wrap">
+        <div class="card pad">
+          <div class="headline">Accede con tu cuenta</div>
+          <div class="auth-form">
+            <input type="email" id="email" placeholder="Email" />
+            <input type="password" id="pwd" placeholder="Contraseña" />
+            <div class="row">
+              <button id="btnLogin" class="btn" style="flex:1">Login</button>
+              <button id="btnReg" class="btn secondary" style="flex:1">Registrar</button>
+            </div>
+            <div class="row" style="justify-content:space-between; align-items:center">
+              <div class="helper">Primero inicia sesión para usar el visor.</div>
+              <button id="btnThemeAuth" class="toggle" title="Cambiar tema">
+                <svg id="iconThemeAuth" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="4"></circle>
+                  <path d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.5-7.5-1.5 1.5M8 18l-1.5 1.5m12 0L18 18M6.5 6.5 8 8"></path>
+                </svg>
+                <span id="labelThemeAuth">Tema</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="status" id="status">—</div>
+      </div>
+    </section>
+
+    <!-- ======== VISOR ======== -->
+    <section id="view-visor" class="view" style="display:none">
+      <div class="cards-grid">
+        <!-- toolbar -->
+        <div class="card pad">
+          <div class="toolbar">
+            <span class="who" id="who">No autenticado</span>
+            <div style="display:flex; gap:10px; align-items:center">
+              <button id="btnTheme" class="toggle" title="Cambiar tema">
+                <svg id="iconTheme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="4"></circle>
+                  <path d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.5-7.5-1.5 1.5M8 18l-1.5 1.5m12 0L18 18M6.5 6.5 8 8"></path>
+                </svg>
+                <span id="labelTheme">Tema</span>
+              </button>
+              <button id="btnLogout" class="btn secondary logout">Salir</button>
+            </div>
+          </div>
+        </div>
+        <!-- search -->
+        <div class="card pad">
+          <div class="headline">Buscar por NIC</div>
+          <div class="searchbar">
+            <input type="text" id="nicInput" placeholder="Ingrese NIC (Suscriptor)" />
+            <button id="btnBuscar" class="btn">Buscar</button>
+          </div>
+          <div class="status" id="statusVisor">Bienvenido.</div>
+        </div>
+        <!-- gallery -->
+        <div class="card pad">
+          <div class="headline">Resultados</div>
+          <div class="gallery" id="gallery"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Modal ===== -->
+  <div class="modal" id="modal">
+    <span class="close" id="btnCerrar" title="Cerrar">&times;</span>
+    <span class="nav prev" id="btnPrev" title="Anterior">&#10094;</span>
+    <div class="modal-inner">
+      <img id="modalImg" src="">
+      <div class="side">
+        <h4>Detalle</h4>
+        <div class="kv" id="sideKv"></div>
+        <div class="actions" id="sideActions"></div>
+        <div class="url" id="sideUrl"></div>
+        <div class="rating-modal" id="modalRating" style="margin-top:8px;">
+          <div class="q" style="margin-bottom:6px;">¿La foto te sirvió para tomar la decisión?</div>
+          <button class="btn" data-v="Sí">Sí</button>
+          <button class="btn" data-v="No">No</button>
+          <span class="saved" id="modalSaved" style="display:none">✔ guardado</span>
+        </div>
+      </div>
+    </div>
+    <span class="nav next" id="btnNext" title="Siguiente">&#10095;</span>
+  </div>
+
+<script>
+/* ================== Helpers ================== */
+const $ = id => document.getElementById(id);
+const statusAuth  = t => { $('status').textContent = t; };
+const statusVisor = t => { $('statusVisor').textContent = t; };
+const pad2 = n => String(n).padStart(2,'0');
+function escapeHtml(v){
+  const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+  return String(v ?? '').replace(/[&<>"']/g, s => map[s]);
+}
+// Fecha solo DD/MM/AAAA
+function formatFechaSmart(val){
+  if(val==null||val==='') return '';
+  if(/^\d{12,}$/.test(String(val))){
+    const d = new Date(Number(val));
+    if(!isNaN(d)) return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`;
+  }
+  const d2 = new Date(val);
+  if(!isNaN(d2)) return `${pad2(d2.getDate())}/${pad2(d2.getMonth()+1)}/${d2.getFullYear()}`;
+  return String(val);
+}
+function showView(name){
+  const ids=['view-auth','view-visor'];
+  ids.forEach(id => $(id).style.display='none');
+  $(name).style.display='block';
+}
+
+/* ======= Normalizador de fechas para ORDENAR (más recientes primero) ======= */
+function toMsFromAny(v){
+  if (v==null || v==='') return 0;
+  if (/^\d+$/.test(String(v))) {
+    const num = Number(v);
+    return String(v).length <= 10 ? num * 1000 : num; // segundos→ms o ms
+  }
+  const m = String(v).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (m){
+    const d = Number(m[1]), mo = Number(m[2]) - 1, y = Number(m[3]);
+    const hh = Number(m[4] || 0), mm = Number(m[5] || 0), ss = Number(m[6] || 0);
+    const dt = new Date(y, mo, d, hh, mm, ss);
+    return isNaN(dt) ? 0 : dt.getTime();
+  }
+  const dt = new Date(v);
+  return isNaN(dt) ? 0 : dt.getTime();
+}
+function getRowDateMs(row){
+  if (row.fecha_gestion_ts != null) return toMsFromAny(row.fecha_gestion_ts);
+  return toMsFromAny(row.fecha_gestion);
+}
+
+/* ================== Theme ================== */
+const THEME_KEY = 'wm_theme';
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  const sun = `<path d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.5-7.5-1.5 1.5M8 18l-1.5 1.5m12 0L18 18M6.5 6.5 8 8"></path><circle cx="12" cy="12" r="4"></circle>`;
+  const moon = `<path d="M21 12.79A9 9 0 1 1 11.21 3c-.1.31-.16.65-.16 1a7 7 0 0 0 7 7c.35 0 .69-.06 1-.16z"></path>`;
+  const isDark = theme === 'dark';
+  const iconTheme = $('iconTheme');
+  const iconThemeAuth = $('iconThemeAuth');
+  if(iconTheme) iconTheme.innerHTML = isDark ? sun : moon;
+  if(iconThemeAuth) iconThemeAuth.innerHTML = isDark ? sun : moon;
+  const label = isDark ? 'Oscuro' : 'Claro';
+  if ($('labelTheme')) $('labelTheme').textContent = label;
+  if ($('labelThemeAuth')) $('labelThemeAuth').textContent = label;
+  localStorage.setItem(THEME_KEY, theme);
+}
+function toggleTheme(){
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
+
+/* ================== Config & Sesión ================== */
+const API_BASE = "http://localhost:3000"; // cambia a "" si sirves todo desde el mismo host
+let AUTH_TOKEN   = localStorage.getItem('wm_token') || null;
+let CURRENT_USER = localStorage.getItem('wm_user') || '';
+let CURRENT_UID  = CURRENT_USER;
+
+// Limpia todo el estado/DOM al salir
+function resetUIOnLogout(){
+  MATCHES = [];
+  modalIdx = 0;
+  if ($('gallery'))     $('gallery').innerHTML = '';
+  if ($('nicInput'))    $('nicInput').value = '';
+  if ($('statusVisor')) $('statusVisor').textContent = '—';
+  if ($('who'))         $('who').textContent = 'No autenticado';
+  if ($('email')) $('email').value = '';
+  if ($('pwd'))   $('pwd').value   = '';
+  if ($('status'))$('status').textContent = 'Primero inicia sesión.';
+  if ($('modal')) $('modal').style.display = 'none';
+  if ($('modalImg')) $('modalImg').src = '';
+  if ($('sideKv')) $('sideKv').innerHTML = '';
+  if ($('sideActions')) $('sideActions').innerHTML = '';
+  if ($('sideUrl')) $('sideUrl').textContent = '';
+}
+
+function setSession(token, email){
+  AUTH_TOKEN   = token || null;
+  CURRENT_USER = email || '';
+  CURRENT_UID  = email || '';
+
+  if (token) localStorage.setItem('wm_token', token); 
+  else       localStorage.removeItem('wm_token');
+
+  if (email) localStorage.setItem('wm_user', email);  
+  else       localStorage.removeItem('wm_user');
+
+  $('who').textContent = token ? `Autenticado: ${email}` : 'No autenticado';
+
+  if (AUTH_TOKEN){
+    showView('view-visor');
+    statusVisor('Bienvenido. Puedes buscar por NIC.');
+  } else {
+    resetUIOnLogout();
+    showView('view-auth');
+  }
+}
+// Estado inicial
+setSession(AUTH_TOKEN, CURRENT_USER);
+
+/* ================== Auth API ================== */
+async function authLogin(email, password){
+  const r = await fetch(`${API_BASE}/auth/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+  if(!r.ok) throw new Error((await safeJson(r))?.error || 'Login inválido');
+  const j = await r.json(); setSession(j.token, j.user.email);
+}
+async function authRegister(email, password){
+  const r = await fetch(`${API_BASE}/auth/register`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+  if(!r.ok) throw new Error((await safeJson(r))?.error || 'Registro falló');
+  const j = await r.json(); setSession(j.token, j.user.email);
+}
+async function safeJson(resp){ try{ return await resp.json(); }catch{ return null; } }
+
+/* Wrapper fetch con token */
+async function apiFetch(url, opts={}){
+  const headers = Object.assign({}, opts.headers || {}, AUTH_TOKEN ? { 'Authorization': `Bearer ${AUTH_TOKEN}` } : {});
+  return fetch(url, { ...opts, headers });
+}
+
+/* ================== Data API ================== */
+async function fetchPhotosByNic(nic){
+  const r = await apiFetch(`${API_BASE}/photos?nic=${encodeURIComponent(nic)}`);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+async function saveRatingByPhoto(photoId, value){
+  try{
+    const r = await apiFetch(`${API_BASE}/ratings/${encodeURIComponent(photoId)}/${encodeURIComponent(CURRENT_UID)}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ value, user: CURRENT_USER })
+    });
+    if (r.ok) return { ok:true, status:r.status };
+    let msg = ''; try { msg = (await r.json())?.error || ''; } catch {}
+    return { ok:false, status:r.status, error: msg || `HTTP ${r.status}` };
+  }catch(err){ return { ok:false, status:0, error:String(err) }; }
+}
+async function getMyRatingByPhoto(photoId){
+  const r = await apiFetch(`${API_BASE}/ratings/${encodeURIComponent(photoId)}/${encodeURIComponent(CURRENT_UID)}`);
+  if(r.status===204) return null;
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return (await r.json())?.value || null;
+}
+
+/* ================== UI: Visor ================== */
+let MATCHES = [];
+let modalIdx = 0;
+
+document.addEventListener('DOMContentLoaded', () => {
+  $('email')?.addEventListener('keydown', e => { if (e.key==='Enter') $('btnLogin').click(); });
+  $('pwd')?.addEventListener('keydown',   e => { if (e.key==='Enter') $('btnLogin').click(); });
+  $('nicInput')?.addEventListener('keydown', e => { if (e.key==='Enter') $('btnBuscar').click(); });
+  $('btnTheme')?.addEventListener('click', toggleTheme);
+  $('btnThemeAuth')?.addEventListener('click', toggleTheme);
+});
+
+/* Auth handlers */
+$('btnLogin').onclick = async ()=>{
+  const email = $('email').value.trim();
+  const pwd   = $('pwd').value;
+  if(!email || !pwd) return alert('Email y contraseña requeridos');
+  try{ await authLogin(email, pwd); } catch(e){ statusAuth(e.message); alert(e.message); }
+};
+$('btnReg').onclick = async ()=>{
+  const email = $('email').value.trim();
+  const pwd   = $('pwd').value;
+  if(!email || !pwd) return alert('Email y contraseña requeridos');
+  try{ await authRegister(email, pwd); } catch(e){ statusAuth(e.message); alert(e.message); }
+};
+$('btnLogout').onclick = ()=> setSession(null, null);
+
+/* Buscar NIC (ordenando por más recientes) */
+$('btnBuscar').onclick = async ()=>{
+  if(!AUTH_TOKEN){ statusVisor('Primero inicia sesión.'); showView('view-auth'); return; }
+  const q = $('nicInput').value.trim();
+  if(!q){ statusVisor('Escribe un NIC para buscar.'); return; }
+  try{
+    statusVisor(`Buscando NIC ${q}...`);
+    MATCHES = await fetchPhotosByNic(q);
+
+    // 🔽 Orden: más recientes primero (desc) según fecha de gestión
+    if(Array.isArray(MATCHES)){
+      MATCHES.sort((a,b) => getRowDateMs(b) - getRowDateMs(a));
+    }else{
+      MATCHES = [];
+    }
+
+    if(!MATCHES.length){
+      statusVisor(`No hay resultados para NIC: ${q}`);
+      $('gallery').innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);">Sin resultados.</div>';
+    }else{
+      statusVisor(`Encontradas ${MATCHES.length} fotos para NIC ${q}.`);
+      await renderGallery(MATCHES);
+    }
+  }catch(e){
+    console.error(e);
+    statusVisor('Error consultando la API.');
+  }
+};
+
+/* Atributos visibles */
+function rowInfoPairs(row){
+  return [
+    ["NIC", row.nic || ""],
+    ["Dirección", row.direccion || ""],
+    ["Fecha Gestión", formatFechaSmart(row.fecha_gestion)],
+    ["Medidor", row.medidor || ""],
+    ["Lectura", row.lectura || ""],
+    ["Lectura Ant.", row.lectura_anterior || ""],
+    ["Tipo Magnitud", row.tipo_magnitud || ""],
+    ["Anomalía", row.anomalia || ""],
+    ["Nombre Suscriptor", row.nombre_suscriptor || ""],
+    ["Gestionada por", row.gestionada_por || ""],
+    ["Contratista", row.contratista || ""],
+    ["Barrio", row.barrio || ""],
+    ["Municipio", row.municipio || ""],
+    ["Nota último intento", row.nota_ultimo_intento || ""]
+  ];
+}
+
+/* ID estable */
+function computePhotoId(row){
+  if (row.id) return String(row.id);
+  if (row.photo_id) return String(row.photo_id);
+  if (row.evidencia) return String(row.evidencia);
+  if (row.url) return String(row.url);
+  const nic   = row.nic ?? '';
+  const med   = row.medidor ?? '';
+  const fecha = row.fecha_gestion ?? row.fecha_gestion_ts ?? '';
+  return `${nic}|${med}|${fecha}`;
+}
+
+/* Icono Maps (SVG) */
+const ICON_MAP = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0"/><path d="M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7z"/></svg>';
+
+/* Botón Google Maps */
+function buildMapButton(row){
+  const la = parseFloat(String(row.latitud||'').replace(',','.'));
+  const lo = parseFloat(String(row.longitud||'').replace(',','.'));
+  if(!isFinite(la)||!isFinite(lo)) return '';
+  return `<a class="btn-link" href="https://www.google.com/maps?q=${la},${lo}" target="_blank" rel="noopener">${ICON_MAP}<span>Google Maps</span></a>`;
+}
+
+/* Render galería */
+async function renderGallery(rows){
+  // Mantener orden por más recientes ante re-renders
+  rows.sort((a,b) => getRowDateMs(b) - getRowDateMs(a));
+
+  const ratingsMap = {};
+  await Promise.all(rows.map(async r => {
+    const pid = computePhotoId(r);
+    ratingsMap[pid] = await getMyRatingByPhoto(pid).catch(()=>null);
+  }));
+
+  $('gallery').innerHTML = rows.map((row, idx) => {
+    const pid = computePhotoId(row);
+    const kv = rowInfoPairs(row).map(([k,v])=> `<span class="k">${escapeHtml(k)}:</span><span class="v">${escapeHtml(v)}</span>`).join('');
+    const url = row.evidencia || row.url || '';
+    const rVal = ratingsMap[pid] || null;
+
+    return `
+      <div class="card">
+        <img class="thumb" data-idx="${idx}" src="${escapeHtml(url)}" alt="img"/>
+        <div class="p-meta">
+          <div class="kv">${kv}</div>
+          <div class="actions">${buildMapButton(row)}</div>
+          <div class="rating" data-photo="${escapeHtml(pid)}">
+            <div class="q">¿La foto te sirvió para tomar la decisión?</div>
+            <div class="opts">
+              <button class="chip rate ${rVal==='Sí'?'on':''}" data-v="Sí">Sí</button>
+              <button class="chip rate ${rVal==='No'?'on':''}" data-v="No">No</button>
+              <span class="saved" style="display:${rVal?'inline':'none'}">✔ guardado</span>
+            </div>
+          </div>
+          <div class="status" title="${escapeHtml(url)}" style="text-align:left; padding:8px 0 0 0;">${escapeHtml(url)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Eventos
+  document.querySelectorAll('.thumb').forEach(img=>{
+    img.addEventListener('click', ev => openModal(Number(ev.currentTarget.dataset.idx)));
+  });
+
+  // Calificación en tarjetas
+  document.querySelectorAll('.rating .rate').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const box = e.currentTarget.closest('.rating'); if (!box) return;
+      const photoId = box.dataset.photo;
+      const val = e.currentTarget.dataset.v;
+
+      const allBtns = Array.from(box.querySelectorAll('.rate'));
+      allBtns.forEach(b => b.disabled = true);
+      const res = await saveRatingByPhoto(photoId, val);
+      allBtns.forEach(b => b.disabled = false);
+
+      if (!res.ok) { statusVisor('No se pudo guardar la calificación.'); return; }
+      allBtns.forEach(x=>x.classList.remove('on'));
+      e.currentTarget.classList.add('on');
+      const savedEl = box.querySelector('.saved');
+      if (savedEl) savedEl.style.display = 'inline';
+      statusVisor('Calificación guardada.');
+    });
+  });
+}
+
+/* Modal */
+function openModal(i){
+  modalIdx=i;
+  const row = MATCHES[i]; if(!row) return;
+  const url = row.evidencia || row.url || '';
+  $('modalImg').src = url;
+
+  $('sideKv').innerHTML = rowInfoPairs(row)
+    .map(([k,v]) => `<div class="k">${escapeHtml(k)}:</div><div class="v">${escapeHtml(v)}</div>`)
+    .join('');
+
+  $('sideActions').innerHTML = buildMapButton(row);
+  $('sideUrl').textContent = url; $('sideUrl').title = url;
+
+  const pid = computePhotoId(row);
+  applyModalRating(pid);
+  $('modal').style.display='flex';
+}
+$('btnCerrar').onclick = () => $('modal').style.display = 'none';
+$('btnPrev').onclick   = () => { if (modalIdx>0) openModal(modalIdx-1); };
+$('btnNext').onclick   = () => { if (modalIdx<MATCHES.length-1) openModal(modalIdx+1); };
+window.addEventListener('keydown', e => { if (e.key==='Escape') $('modal').style.display='none'; });
+
+// Calificación en modal
+document.querySelectorAll('#modalRating .btn').forEach(b=>{
+  b.addEventListener('click', async e=>{
+    const row = MATCHES[modalIdx]; if(!row) return;
+    const pid = computePhotoId(row);
+    const val = e.currentTarget.dataset.v;
+
+    const modalBtns = Array.from(document.querySelectorAll('#modalRating .btn'));
+    modalBtns.forEach(x => x.disabled = true);
+    const res = await saveRatingByPhoto(pid, val);
+    modalBtns.forEach(x => x.disabled = false);
+
+    if (!res.ok) { statusVisor('No se pudo guardar la calificación.'); return; }
+
+    await applyModalRating(pid);
+    renderGallery(MATCHES);
+    statusVisor('Calificación guardada.');
+  });
+});
+async function applyModalRating(photoId){
+  try{
+    const v = await getMyRatingByPhoto(photoId);
+    document.querySelectorAll('#modalRating .btn').forEach(x=>x.classList.remove('on'));
+    if(v) document.querySelector(`#modalRating .btn[data-v="${v}"]`)?.classList.add('on');
+    $('modalSaved').style.display = v ? 'inline' : 'none';
+  }catch{ $('modalSaved').style.display = 'none'; }
+}
+</script>
+</body>
+</html>
